@@ -18,8 +18,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
       - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           working-directory: api
 
@@ -34,6 +35,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
       - run: go test -race -coverprofile=coverage.out ./...
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -52,6 +54,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
       - run: make build
 
   fe-lint:
