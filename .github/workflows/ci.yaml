@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  be-lint:
+    name: "BE: Lint"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: api
+
+  be-test:
+    name: "BE: Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+      - run: go test -race -coverprofile=coverage.out ./...
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: be-coverage
+          path: api/coverage.out
+
+  be-build:
+    name: "BE: Build"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+      - run: make build
+
+  fe-lint:
+    name: "FE: Lint"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
+  fe-test:
+    name: "FE: Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  fe-build:
+    name: "FE: Build"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://placeholder.example.com
+
+  infra-validate:
+    name: "Infra: CFN Validate"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/setup-sam@v2
+      - run: sam validate --template infra/template.yaml --lint
+
+  ci-gate:
+    name: "CI Gate"
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - be-lint
+      - be-test
+      - be-build
+      - fe-lint
+      - fe-test
+      - fe-build
+      - infra-validate
+    steps:
+      - name: Check all jobs passed
+        run: |
+          results="${{ needs.be-lint.result }} ${{ needs.be-test.result }} ${{ needs.be-build.result }} ${{ needs.fe-lint.result }} ${{ needs.fe-test.result }} ${{ needs.fe-build.result }} ${{ needs.infra-validate.result }}"
+          for result in $results; do
+            if [ "$result" != "success" ]; then
+              echo "Job failed with result: $result"
+              exit 1
+            fi
+          done
+          echo "All CI checks passed"
