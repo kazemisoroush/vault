@@ -1,0 +1,30 @@
+# Go
+api/bin/
+api/vendor/
+
+# Next.js
+web/node_modules/
+web/.next/
+web/out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AWS SAM
+.aws-sam/
+
+# Build
+dist/
+tmp/
