@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -57,7 +59,7 @@ func (h *Handler) ListFiles(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.ListFiles(r.Context(), query)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "list files", err)
 		return
 	}
 
@@ -69,7 +71,7 @@ func (h *Handler) GetFile(w http.ResponseWriter, r *http.Request) {
 
 	file, err := h.service.GetFile(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "get file", err)
 		return
 	}
 	if file == nil {
@@ -116,7 +118,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.UploadFile(r.Context(), req)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "upload file", err)
 		return
 	}
 
@@ -134,7 +136,11 @@ func (h *Handler) UpdateFile(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.UpdateFile(r.Context(), id, req)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, metadata.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "file not found")
+			return
+		}
+		writeInternalError(w, "update file", err)
 		return
 	}
 
@@ -145,7 +151,11 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := h.service.DeleteFile(r.Context(), id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, metadata.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "file not found")
+			return
+		}
+		writeInternalError(w, "delete file", err)
 		return
 	}
 
@@ -155,7 +165,7 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 	count, err := h.service.Sync(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "sync", err)
 		return
 	}
 
@@ -165,7 +175,7 @@ func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.service.ListCategories(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "list categories", err)
 		return
 	}
 
@@ -175,7 +185,7 @@ func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	tags, err := h.service.ListTags(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "list tags", err)
 		return
 	}
 
@@ -190,4 +200,10 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+// writeInternalError logs the detailed error and returns a generic 500 to the client.
+func writeInternalError(w http.ResponseWriter, context string, err error) {
+	log.Printf("%s: %v", context, err)
+	writeError(w, http.StatusInternalServerError, "internal server error")
 }

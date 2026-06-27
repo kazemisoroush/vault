@@ -7,10 +7,11 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	DynamoDBTable       string
-	GoogleClientID      string
-	GoogleClientSecret  string
-	GoogleRefreshToken  string
+	DynamoDBTable      string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRefreshToken string
+	OwnerEmail         string
 }
 
 // Load reads configuration from environment variables.
@@ -20,6 +21,7 @@ func Load() (*Config, error) {
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleRefreshToken: os.Getenv("GOOGLE_REFRESH_TOKEN"),
+		OwnerEmail:         os.Getenv("OWNER_EMAIL"),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -38,6 +40,9 @@ func (c *Config) validate() error {
 	}
 	if c.GoogleRefreshToken == "" {
 		return fmt.Errorf("GOOGLE_REFRESH_TOKEN is required")
+	}
+	if c.OwnerEmail == "" {
+		return fmt.Errorf("OWNER_EMAIL is required")
 	}
 	return nil
 }

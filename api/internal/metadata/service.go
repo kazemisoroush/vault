@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,9 @@ import (
 	"github.com/kazemisoroush/vault/api/internal/model"
 	"github.com/kazemisoroush/vault/api/internal/storage"
 )
+
+// ErrNotFound is returned when a requested file does not exist.
+var ErrNotFound = errors.New("file not found")
 
 // Service coordinates blob storage and metadata operations.
 type Service struct {
@@ -77,7 +81,7 @@ func (s *Service) UpdateFile(ctx context.Context, id string, req UpdateRequest) 
 		return nil, fmt.Errorf("getting file: %w", err)
 	}
 	if file == nil {
-		return nil, fmt.Errorf("file not found: %s", id)
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
 
 	if req.Category != nil {
@@ -102,7 +106,7 @@ func (s *Service) DeleteFile(ctx context.Context, id string) error {
 		return fmt.Errorf("getting file: %w", err)
 	}
 	if file == nil {
-		return fmt.Errorf("file not found: %s", id)
+		return fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
 
 	if err := s.blobs.DeleteFile(ctx, file.DriveFileID); err != nil {
@@ -135,7 +139,7 @@ func (s *Service) Sync(ctx context.Context) (int, error) {
 			}
 
 			file := model.File{
-				ID:           uuid.New().String(),
+				ID:           obj.ID,
 				DriveFileID:  obj.ID,
 				Name:         obj.Name,
 				MimeType:     obj.MimeType,

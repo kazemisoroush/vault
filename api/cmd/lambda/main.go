@@ -9,6 +9,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	awslambda "github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
+	"github.com/kazemisoroush/vault/api/internal/auth"
 	"github.com/kazemisoroush/vault/api/internal/blob"
 	"github.com/kazemisoroush/vault/api/internal/config"
 	"github.com/kazemisoroush/vault/api/internal/handler"
@@ -58,6 +59,8 @@ func main() {
 	h := handler.NewHandler(metadataService)
 	h.RegisterRoutes(mux)
 
-	adapter := awslambda.New(mux)
+	authMiddleware := auth.NewMiddleware(auth.NewGoogleValidator(cfg.GoogleClientID), cfg.OwnerEmail)
+
+	adapter := awslambda.New(authMiddleware.Wrap(mux))
 	lambda.Start(adapter.ProxyWithContext)
 }

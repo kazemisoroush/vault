@@ -106,6 +106,7 @@ jobs:
       - run: npm run build
         env:
           NEXT_PUBLIC_API_URL: https://placeholder.example.com
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: placeholder-client-id
 
   infra-validate:
     name: "Infra: CFN Validate"

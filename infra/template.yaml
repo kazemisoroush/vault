@@ -20,8 +20,40 @@ Parameters:
   GoogleRefreshToken:
     Type: String
     NoEcho: true
+  OwnerEmail:
+    Type: String
+    Description: Google account email allowed to access the vault.
+  WebOrigin:
+    Type: String
+    Default: "*"
+    Description: Allowed CORS origin for the web app.
 
 Resources:
+  VaultHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        Authorizers:
+          GoogleJwt:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: https://accounts.google.com
+              audience:
+                - !Ref GoogleClientID
+        DefaultAuthorizer: GoogleJwt
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref WebOrigin
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+
   VaultFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -33,6 +65,7 @@ Resources:
           GOOGLE_CLIENT_ID: !Ref GoogleClientID
           GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
           GOOGLE_REFRESH_TOKEN: !Ref GoogleRefreshToken
+          OWNER_EMAIL: !Ref OwnerEmail
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref VaultTable
@@ -40,6 +73,7 @@ Resources:
         ApiProxy:
           Type: HttpApi
           Properties:
+            ApiId: !Ref VaultHttpApi
             Path: /{proxy+}
             Method: ANY
     Metadata:
@@ -77,4 +111,4 @@ Resources:
 Outputs:
   ApiUrl:
     Description: API Gateway URL
-    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Value: !Sub "https://${VaultHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
