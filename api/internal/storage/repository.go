@@ -6,6 +6,8 @@ import (
 	"github.com/kazemisoroush/vault/api/internal/model"
 )
 
+//go:generate go tool mockgen -source=repository.go -destination=repository_mock.go -package=storage
+
 // Repository defines the interface for metadata persistence.
 type Repository interface {
 	PutFile(ctx context.Context, file model.File) error

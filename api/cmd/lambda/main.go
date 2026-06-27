@@ -9,8 +9,8 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	awslambda "github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
+	"github.com/kazemisoroush/vault/api/internal/blob"
 	"github.com/kazemisoroush/vault/api/internal/config"
-	driveClient "github.com/kazemisoroush/vault/api/internal/drive"
 	"github.com/kazemisoroush/vault/api/internal/handler"
 	"github.com/kazemisoroush/vault/api/internal/metadata"
 	"github.com/kazemisoroush/vault/api/internal/storage"
@@ -47,12 +47,12 @@ func main() {
 	}
 	tokenSource := oauthConfig.TokenSource(ctx, token)
 
-	driveService, err := driveClient.NewClient(ctx, tokenSource)
+	blobStorage, err := blob.NewDriveStorage(ctx, tokenSource)
 	if err != nil {
-		log.Fatalf("creating drive client: %v", err)
+		log.Fatalf("creating blob storage: %v", err)
 	}
 
-	metadataService := metadata.NewService(driveService, repo)
+	metadataService := metadata.NewService(blobStorage, repo)
 
 	mux := http.NewServeMux()
 	h := handler.NewHandler(metadataService)

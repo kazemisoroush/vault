@@ -1,14 +1,9 @@
 version: "2"
 
 linters:
+  default: standard
   enable:
-    - errcheck
-    - govet
-    - staticcheck
-    - unused
-    - ineffassign
-    - gosimple
-
+    - wrapcheck
   settings:
     errcheck:
       check-type-assertions: true

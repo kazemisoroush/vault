@@ -23,7 +23,7 @@ func Load() (*Config, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validating config: %w", err)
 	}
 
 	return cfg, nil

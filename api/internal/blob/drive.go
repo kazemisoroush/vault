@@ -1,4 +1,4 @@
-package drive
+package blob
 
 import (
 	"context"
@@ -10,41 +10,28 @@ import (
 	"google.golang.org/api/option"
 )
 
-// Client wraps the Google Drive API.
-type Client struct {
+// DriveStorage implements Storage backed by the Google Drive API.
+type DriveStorage struct {
 	service *driveapi.Service
 }
 
-// NewClient creates a Drive client from an OAuth2 token source.
-func NewClient(ctx context.Context, tokenSource oauth2.TokenSource) (*Client, error) {
+// NewDriveStorage creates a Drive-backed Storage from an OAuth2 token source.
+func NewDriveStorage(ctx context.Context, tokenSource oauth2.TokenSource) (*DriveStorage, error) {
 	service, err := driveapi.NewService(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
 		return nil, fmt.Errorf("creating drive service: %w", err)
 	}
-	return &Client{service: service}, nil
-}
-
-// DriveFile holds raw Drive file metadata.
-type DriveFile struct {
-	ID           string
-	Name         string
-	MimeType     string
-	Size         int64
-	Parents      []string
-	CreatedTime  string
-	ModifiedTime string
-	ThumbnailURL string
-	WebViewURL   string
+	return &DriveStorage{service: service}, nil
 }
 
 // ListFiles lists files in the user's Drive, optionally filtered by folder ID.
-func (c *Client) ListFiles(ctx context.Context, folderID string, pageToken string, pageSize int64) ([]DriveFile, string, error) {
+func (s *DriveStorage) ListFiles(ctx context.Context, folderID string, pageToken string, pageSize int64) ([]Object, string, error) {
 	query := "trashed = false"
 	if folderID != "" {
 		query = fmt.Sprintf("'%s' in parents and trashed = false", folderID)
 	}
 
-	call := c.service.Files.List().
+	call := s.service.Files.List().
 		Context(ctx).
 		Q(query).
 		Fields("nextPageToken, files(id, name, mimeType, size, parents, createdTime, modifiedTime, thumbnailLink, webViewLink)").
@@ -59,9 +46,9 @@ func (c *Client) ListFiles(ctx context.Context, folderID string, pageToken strin
 		return nil, "", fmt.Errorf("listing files: %w", err)
 	}
 
-	files := make([]DriveFile, 0, len(result.Files))
+	files := make([]Object, 0, len(result.Files))
 	for _, f := range result.Files {
-		files = append(files, DriveFile{
+		files = append(files, Object{
 			ID:           f.Id,
 			Name:         f.Name,
 			MimeType:     f.MimeType,
@@ -78,7 +65,7 @@ func (c *Client) ListFiles(ctx context.Context, folderID string, pageToken strin
 }
 
 // UploadFile uploads a file to Google Drive.
-func (c *Client) UploadFile(ctx context.Context, name string, mimeType string, folderID string, reader io.Reader) (*DriveFile, error) {
+func (s *DriveStorage) UploadFile(ctx context.Context, name string, mimeType string, folderID string, reader io.Reader) (*Object, error) {
 	driveFile := &driveapi.File{
 		Name:     name,
 		MimeType: mimeType,
@@ -87,7 +74,7 @@ func (c *Client) UploadFile(ctx context.Context, name string, mimeType string, f
 		driveFile.Parents = []string{folderID}
 	}
 
-	result, err := c.service.Files.Create(driveFile).
+	result, err := s.service.Files.Create(driveFile).
 		Context(ctx).
 		Media(reader).
 		Fields("id, name, mimeType, size, parents, createdTime, modifiedTime, thumbnailLink, webViewLink").
@@ -96,7 +83,7 @@ func (c *Client) UploadFile(ctx context.Context, name string, mimeType string, f
 		return nil, fmt.Errorf("uploading file: %w", err)
 	}
 
-	return &DriveFile{
+	return &Object{
 		ID:           result.Id,
 		Name:         result.Name,
 		MimeType:     result.MimeType,
@@ -110,8 +97,8 @@ func (c *Client) UploadFile(ctx context.Context, name string, mimeType string, f
 }
 
 // DownloadFile returns a reader for a file's content.
-func (c *Client) DownloadFile(ctx context.Context, fileID string) (io.ReadCloser, error) {
-	resp, err := c.service.Files.Get(fileID).Context(ctx).Download()
+func (s *DriveStorage) DownloadFile(ctx context.Context, fileID string) (io.ReadCloser, error) {
+	resp, err := s.service.Files.Get(fileID).Context(ctx).Download()
 	if err != nil {
 		return nil, fmt.Errorf("downloading file: %w", err)
 	}
@@ -119,8 +106,8 @@ func (c *Client) DownloadFile(ctx context.Context, fileID string) (io.ReadCloser
 }
 
 // DeleteFile moves a file to trash in Google Drive.
-func (c *Client) DeleteFile(ctx context.Context, fileID string) error {
-	_, err := c.service.Files.Update(fileID, &driveapi.File{Trashed: true}).
+func (s *DriveStorage) DeleteFile(ctx context.Context, fileID string) error {
+	_, err := s.service.Files.Update(fileID, &driveapi.File{Trashed: true}).
 		Context(ctx).
 		Do()
 	if err != nil {
@@ -130,8 +117,8 @@ func (c *Client) DeleteFile(ctx context.Context, fileID string) error {
 }
 
 // GetFile retrieves metadata for a single file.
-func (c *Client) GetFile(ctx context.Context, fileID string) (*DriveFile, error) {
-	f, err := c.service.Files.Get(fileID).
+func (s *DriveStorage) GetFile(ctx context.Context, fileID string) (*Object, error) {
+	f, err := s.service.Files.Get(fileID).
 		Context(ctx).
 		Fields("id, name, mimeType, size, parents, createdTime, modifiedTime, thumbnailLink, webViewLink").
 		Do()
@@ -139,7 +126,7 @@ func (c *Client) GetFile(ctx context.Context, fileID string) (*DriveFile, error)
 		return nil, fmt.Errorf("getting file: %w", err)
 	}
 
-	return &DriveFile{
+	return &Object{
 		ID:           f.Id,
 		Name:         f.Name,
 		MimeType:     f.MimeType,
