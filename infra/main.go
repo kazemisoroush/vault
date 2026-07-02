@@ -2,6 +2,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2integrations"
@@ -88,5 +90,11 @@ func main() {
 
 	app := awscdk.NewApp(nil)
 	NewVaultStack(app, "VaultStack", nil)
+	NewVaultCicdStack(app, "VaultCicdStack", &awscdk.StackProps{
+		Env: &awscdk.Environment{
+			Account: jsii.String(os.Getenv("CDK_DEFAULT_ACCOUNT")),
+			Region:  jsii.String(os.Getenv("CDK_DEFAULT_REGION")),
+		},
+	})
 	app.Synth(nil)
 }

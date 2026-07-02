@@ -34,3 +34,29 @@ jobs:
       - name: Build
         working-directory: infra
         run: go build ./...
+      - name: Test
+        working-directory: infra
+        run: go test ./...
+
+  deploy:
+    needs: [backend, infra]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: infra/go.mod
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Install CDK
+        run: npm install -g aws-cdk@2
+      - name: Deploy
+        working-directory: infra
+        run: cdk deploy VaultStack --require-approval never
