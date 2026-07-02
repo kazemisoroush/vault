@@ -10,7 +10,7 @@ type File struct {
 	Name        string            `json:"name" dynamodbav:"name"`
 	ContentType string            `json:"contentType" dynamodbav:"contentType"`
 	Size        int64             `json:"size" dynamodbav:"size"`
-	Meta        map[string]string `json:"meta" dynamodbav:"meta"`
+	Meta        map[string]string `json:"meta,omitempty" dynamodbav:"meta,omitempty"`
 	CreatedAt   time.Time         `json:"createdAt" dynamodbav:"createdAt"`
 	UpdatedAt   time.Time         `json:"updatedAt" dynamodbav:"updatedAt"`
 }

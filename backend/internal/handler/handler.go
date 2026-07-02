@@ -22,7 +22,7 @@ const (
 	presignExpiry = 15 * time.Minute
 )
 
-// Handler routes the five verbs to the index and the blob store.
+// Handler routes the API to the index and the blob store.
 type Handler struct {
 	index index.Index
 	blobs blob.Store
@@ -194,13 +194,13 @@ func (h *Handler) deleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.blobs.Delete(r.Context(), file.Key); err != nil {
-		writeError(w, http.StatusInternalServerError, "could not delete file bytes")
+	if err := h.index.Delete(r.Context(), file.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete file record")
 		return
 	}
 
-	if err := h.index.Delete(r.Context(), file.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, "could not delete file record")
+	if err := h.blobs.Delete(r.Context(), file.Key); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete file bytes")
 		return
 	}
 

@@ -86,7 +86,7 @@ func TestListFilesRejectsBadLimit(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestDeleteFileRemovesBlobThenRecord(t *testing.T) {
+func TestDeleteFileRemovesRecordThenBlob(t *testing.T) {
 	// Arrange
 	h, idx, blobs := newTestHandler(t)
 	file := domain.File{ID: "test-id", Key: "files/test-id"}

@@ -2,7 +2,8 @@ openapi: 3.0.3
 info:
   title: Vault API
   description: >
-    Personal data vault. Five verbs only: drop, get, list, update, delete.
+    Personal data vault. Five file verbs: drop, get, list, update, delete,
+    plus a health check for liveness.
     This contract is the source of truth. Backend implements it, frontend consumes it,
     and no client talks to storage directly. File bytes move through presigned S3 URLs
     so the API never carries file content.
@@ -29,7 +30,7 @@ paths:
           $ref: '#/components/responses/BadRequest'
     get:
       operationId: listFiles
-      summary: List file records, newest first.
+      summary: List file records.
       parameters:
         - name: limit
           in: query

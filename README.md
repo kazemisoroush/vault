@@ -6,8 +6,8 @@ free-form phrase. No folders, no tags, no enums.
 ## API first
 
 [openapi.yaml](openapi.yaml) is the source of truth. The backend implements it, every
-client consumes it, and nothing talks to storage directly. The API has exactly five
-verbs: drop, get, list, update, delete.
+client consumes it, and nothing talks to storage directly. The API has five file
+verbs: drop, get, list, update, delete, plus a health check for liveness.
 
 ## Layout
 
