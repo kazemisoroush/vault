@@ -1,0 +1,11 @@
+bin/
+cdk.out/
+.env
+.env.*
+node_modules/
+.next/
+.DS_Store
+coverage.out
+
+# compiled infra binary
+infra/infra
