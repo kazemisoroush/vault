@@ -1,5 +1,6 @@
-// CDK app defining the CI/CD trust that lets GitHub Actions deploy via OIDC.
 package main
+
+// This file defines the CI/CD trust that lets GitHub Actions deploy via OIDC.
 
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
