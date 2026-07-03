@@ -8,6 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
+	"github.com/aws/aws-sdk-go-v2/config"
 )
 
 // instruction tells the model to return only a flat JSON metadata object.
@@ -21,16 +22,13 @@ const maxTokens = 1024
 
 // ClaudeExtractor extracts metadata using Claude on Amazon Bedrock.
 type ClaudeExtractor struct {
-	client *bedrock.MantleClient
+	client anthropic.Client
 	model  string
 }
 
 // NewClaudeExtractor builds a ClaudeExtractor for a Bedrock region and model.
-func NewClaudeExtractor(ctx context.Context, region, model string) (*ClaudeExtractor, error) {
-	client, err := bedrock.NewMantleClient(ctx, bedrock.MantleClientConfig{AWSRegion: region})
-	if err != nil {
-		return nil, fmt.Errorf("build bedrock client: %w", err)
-	}
+func NewClaudeExtractor(_ context.Context, region, model string) (*ClaudeExtractor, error) {
+	client := anthropic.NewClient(bedrock.WithLoadDefaultConfig(context.Background(), config.WithRegion(region)))
 	return &ClaudeExtractor{client: client, model: model}, nil
 }
 

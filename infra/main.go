@@ -19,8 +19,8 @@ import (
 	"github.com/cdklabs/cdk-nag-go/cdknag/v2"
 )
 
-// extractorModel is the Bedrock Claude model that fills file metadata on drop.
-const extractorModel = "anthropic.claude-haiku-4-5"
+// extractorModel is the Bedrock Claude inference profile that fills metadata on drop.
+const extractorModel = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 // NewVaultStack defines the S3 bucket, DynamoDB index and API Lambda.
 func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackProps) awscdk.Stack {
