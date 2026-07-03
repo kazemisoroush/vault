@@ -6,12 +6,15 @@ import (
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2authorizers"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2integrations"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscognito"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	golambda "github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
+	"github.com/cdklabs/cdk-nag-go/cdknag/v2"
 )
 
 // NewVaultStack defines the S3 bucket, DynamoDB index and API Lambda.
@@ -48,11 +51,34 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		},
 	})
 
+	pool := awscognito.NewUserPool(stack, jsii.String("Users"), &awscognito.UserPoolProps{
+		SelfSignUpEnabled: jsii.Bool(false),
+		SignInAliases:     &awscognito.SignInAliases{Email: jsii.Bool(true)},
+		PasswordPolicy: &awscognito.PasswordPolicy{
+			MinLength:        jsii.Number(12),
+			RequireLowercase: jsii.Bool(true),
+			RequireUppercase: jsii.Bool(true),
+			RequireDigits:    jsii.Bool(true),
+			RequireSymbols:   jsii.Bool(true),
+		},
+		AccountRecovery: awscognito.AccountRecovery_EMAIL_ONLY,
+		RemovalPolicy:   awscdk.RemovalPolicy_DESTROY,
+	})
+
+	client := pool.AddClient(jsii.String("ApiClient"), &awscognito.UserPoolClientOptions{
+		GenerateSecret:      jsii.Bool(false),
+		AuthFlows:           &awscognito.AuthFlow{UserPassword: jsii.Bool(true), UserSrp: jsii.Bool(true)},
+		AccessTokenValidity: awscdk.Duration_Hours(jsii.Number(1)),
+		IdTokenValidity:     awscdk.Duration_Hours(jsii.Number(1)),
+	})
+
 	fn := golambda.NewGoFunction(stack, jsii.String("Api"), &golambda.GoFunctionProps{
 		Entry: jsii.String("../backend/cmd/lambda"),
 		Environment: &map[string]*string{
-			"VAULT_TABLE":  table.TableName(),
-			"VAULT_BUCKET": bucket.BucketName(),
+			"VAULT_TABLE":         table.TableName(),
+			"VAULT_BUCKET":        bucket.BucketName(),
+			"VAULT_JWT_ISSUER":    pool.UserPoolProviderUrl(),
+			"VAULT_JWT_CLIENT_ID": client.UserPoolClientId(),
 		},
 	})
 
@@ -72,15 +98,31 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 			AllowHeaders: jsii.Strings("Content-Type", "Authorization"),
 		},
 	})
+
+	integration := awsapigatewayv2integrations.NewHttpLambdaIntegration(jsii.String("ApiIntegration"), fn, nil)
+	authorizer := awsapigatewayv2authorizers.NewHttpUserPoolAuthorizer(jsii.String("JwtAuthorizer"), pool, &awsapigatewayv2authorizers.HttpUserPoolAuthorizerProps{
+		UserPoolClients: &[]awscognito.IUserPoolClient{client},
+	})
+
+	healthRoutes := api.AddRoutes(&awsapigatewayv2.AddRoutesOptions{
+		Path:        jsii.String("/health"),
+		Methods:     &[]awsapigatewayv2.HttpMethod{awsapigatewayv2.HttpMethod_GET},
+		Integration: integration,
+	})
 	api.AddRoutes(&awsapigatewayv2.AddRoutesOptions{
 		Path:        jsii.String("/{proxy+}"),
 		Methods:     &[]awsapigatewayv2.HttpMethod{awsapigatewayv2.HttpMethod_ANY},
-		Integration: awsapigatewayv2integrations.NewHttpLambdaIntegration(jsii.String("ApiIntegration"), fn, nil),
+		Integration: integration,
+		Authorizer:  authorizer,
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{Value: api.Url()})
 	awscdk.NewCfnOutput(stack, jsii.String("BucketName"), &awscdk.CfnOutputProps{Value: bucket.BucketName()})
 	awscdk.NewCfnOutput(stack, jsii.String("TableName"), &awscdk.CfnOutputProps{Value: table.TableName()})
+	awscdk.NewCfnOutput(stack, jsii.String("UserPoolId"), &awscdk.CfnOutputProps{Value: pool.UserPoolId()})
+	awscdk.NewCfnOutput(stack, jsii.String("UserPoolClientId"), &awscdk.CfnOutputProps{Value: client.UserPoolClientId()})
+
+	suppressNag(stack, (*healthRoutes)[0])
 
 	return stack
 }
@@ -96,5 +138,6 @@ func main() {
 			Region:  jsii.String(os.Getenv("CDK_DEFAULT_REGION")),
 		},
 	})
+	awscdk.Aspects_Of(app).Add(cdknag.NewAwsSolutionsChecks(&cdknag.NagPackProps{Verbose: jsii.Bool(true)}), nil)
 	app.Synth(nil)
 }

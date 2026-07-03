@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
+	"github.com/cdklabs/cdk-nag-go/cdknag/v2"
 )
 
 // gitHubOIDCURL is the GitHub Actions OIDC issuer.
@@ -53,6 +54,13 @@ func NewVaultCICDStack(scope constructs.Construct, id string, props *awscdk.Stac
 		Actions:   jsii.Strings("sts:AssumeRole"),
 		Resources: jsii.Strings(bootstrapRoles),
 	}))
+
+	cdknag.NagSuppressions_AddResourceSuppressions(role, &[]*cdknag.NagPackSuppression{
+		{
+			Id:     jsii.String("AwsSolutions-IAM5"),
+			Reason: jsii.String("The deploy role may only assume the CDK bootstrap roles, which share the cdk-hnb659fds-* name prefix; the wildcard is scoped to those roles in this account."),
+		},
+	}, jsii.Bool(true))
 
 	awscdk.NewCfnOutput(stack, jsii.String("DeployRoleArn"), &awscdk.CfnOutputProps{Value: role.RoleArn()})
 

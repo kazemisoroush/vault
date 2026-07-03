@@ -8,6 +8,8 @@ info:
     and no client talks to storage directly. File bytes move through presigned S3 URLs
     so the API never carries file content.
   version: 0.1.0
+security:
+  - bearerAuth: []
 paths:
   /files:
     post:
@@ -97,10 +99,20 @@ paths:
     get:
       operationId: health
       summary: Liveness check.
+      security: []
       responses:
         '200':
           description: Service is up.
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Cognito access token. Obtain it by authenticating to the Vault user pool,
+        then send it as Authorization: Bearer <token>. Every route except /health
+        requires it.
   schemas:
     File:
       type: object

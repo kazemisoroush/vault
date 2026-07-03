@@ -12,6 +12,8 @@ github.com/cdklabs/awscdk-asset-awscli-go/awscliv1/v2 v2.2.282 h1:j/9js4FPxAxjPA
 github.com/cdklabs/awscdk-asset-awscli-go/awscliv1/v2 v2.2.282/go.mod h1:9B0mhAoX2rP440frcAbsPzIrGW5BI/TLMa8zg2oCd10=
 github.com/cdklabs/awscdk-asset-node-proxy-agent-go/nodeproxyagentv6/v2 v2.1.2 h1:xAsctRl309idodSn5nShEHg3MtCIhbR7SRwtg4mk0tY=
 github.com/cdklabs/awscdk-asset-node-proxy-agent-go/nodeproxyagentv6/v2 v2.1.2/go.mod h1:fM0jJhRyx51Tcu8cVKbgWSMIeTGo6OtwZezt1mHZPQY=
+github.com/cdklabs/cdk-nag-go/cdknag/v2 v2.38.2 h1:oR6JAI7uYwUb1Eeili76/5omPWav98DLkviySDdmFIQ=
+github.com/cdklabs/cdk-nag-go/cdknag/v2 v2.38.2/go.mod h1:T0QK5HWzTvdA2xVqjzDSSFbnab8zGWDDXA6Vs+Ol/8E=
 github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v54 v54.1.0 h1:iA1Vwu5f2iNxEB0AKAQDG5JShspvtPi9eRZ3gpscfVQ=
 github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v54 v54.1.0/go.mod h1:1PwChVJmwYriy//dcYl/1O4YrbGdGqX3OTKzJV5xGX0=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
