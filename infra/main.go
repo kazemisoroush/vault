@@ -10,12 +10,17 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2integrations"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscognito"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3notifications"
 	golambda "github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/cdklabs/cdk-nag-go/cdknag/v2"
 )
+
+// extractorModel is the Bedrock Claude inference profile that fills metadata on drop.
+const extractorModel = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 // NewVaultStack defines the S3 bucket, DynamoDB index and API Lambda.
 func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackProps) awscdk.Stack {
@@ -73,18 +78,35 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 	})
 
 	fn := golambda.NewGoFunction(stack, jsii.String("Api"), &golambda.GoFunctionProps{
-		Entry: jsii.String("../backend/cmd/lambda"),
+		Entry:   jsii.String("../backend/cmd/lambda"),
+		Timeout: awscdk.Duration_Seconds(jsii.Number(30)),
 		Environment: &map[string]*string{
-			"VAULT_TABLE":         table.TableName(),
-			"VAULT_BUCKET":        bucket.BucketName(),
-			"VAULT_JWT_ISSUER":    pool.UserPoolProviderUrl(),
-			"VAULT_JWT_CLIENT_ID": client.UserPoolClientId(),
+			"VAULT_TABLE":           table.TableName(),
+			"VAULT_BUCKET":          bucket.BucketName(),
+			"VAULT_JWT_ISSUER":      pool.UserPoolProviderUrl(),
+			"VAULT_JWT_CLIENT_ID":   client.UserPoolClientId(),
+			"VAULT_BEDROCK_REGION":  stack.Region(),
+			"VAULT_EXTRACTOR_MODEL": jsii.String(extractorModel),
 		},
 	})
 
 	bucket.GrantReadWrite(fn, nil)
 	bucket.GrantDelete(fn, nil)
 	table.GrantReadWriteData(fn)
+
+	fn.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions: jsii.Strings("bedrock:InvokeModel"),
+		Resources: jsii.Strings(
+			"arn:aws:bedrock:*::foundation-model/anthropic.*",
+			"arn:aws:bedrock:*:"+*stack.Account()+":inference-profile/*",
+		),
+	}))
+
+	bucket.AddEventNotification(
+		awss3.EventType_OBJECT_CREATED,
+		awss3notifications.NewLambdaDestination(fn),
+		&awss3.NotificationKeyFilter{Prefix: jsii.String("files/")},
+	)
 
 	api := awsapigatewayv2.NewHttpApi(stack, jsii.String("HttpApi"), &awsapigatewayv2.HttpApiProps{
 		CorsPreflight: &awsapigatewayv2.CorsPreflightOptions{

@@ -3,6 +3,7 @@ package blob
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -50,6 +51,29 @@ func (s *S3Store) PresignGet(ctx context.Context, key string, expiry time.Durati
 	}
 
 	return req.URL, nil
+}
+
+// Get reads an object's bytes and content type from the bucket.
+func (s *S3Store) Get(ctx context.Context, key string) ([]byte, string, error) {
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("get object %q: %w", key, err)
+	}
+	defer func() { _ = out.Body.Close() }()
+
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("read object %q: %w", key, err)
+	}
+
+	contentType := ""
+	if out.ContentType != nil {
+		contentType = *out.ContentType
+	}
+	return data, contentType, nil
 }
 
 // Delete removes the object from the bucket.

@@ -7,23 +7,27 @@ const defaultServerAddr = ":8080"
 
 // Config holds every runtime setting the backend reads from the environment.
 type Config struct {
-	Table        string
-	Bucket       string
-	JWTIssuer    string
-	JWTClientID  string
-	Addr         string
-	AuthDisabled bool
+	Table          string
+	Bucket         string
+	JWTIssuer      string
+	JWTClientID    string
+	Addr           string
+	AuthDisabled   bool
+	BedrockRegion  string
+	ExtractorModel string
 }
 
 // Load reads the configuration from environment variables.
 func Load() Config {
 	return Config{
-		Table:        os.Getenv("VAULT_TABLE"),
-		Bucket:       os.Getenv("VAULT_BUCKET"),
-		JWTIssuer:    os.Getenv("VAULT_JWT_ISSUER"),
-		JWTClientID:  os.Getenv("VAULT_JWT_CLIENT_ID"),
-		Addr:         os.Getenv("VAULT_ADDR"),
-		AuthDisabled: os.Getenv("VAULT_AUTH_DISABLED") == "true",
+		Table:          os.Getenv("VAULT_TABLE"),
+		Bucket:         os.Getenv("VAULT_BUCKET"),
+		JWTIssuer:      os.Getenv("VAULT_JWT_ISSUER"),
+		JWTClientID:    os.Getenv("VAULT_JWT_CLIENT_ID"),
+		Addr:           os.Getenv("VAULT_ADDR"),
+		AuthDisabled:   os.Getenv("VAULT_AUTH_DISABLED") == "true",
+		BedrockRegion:  os.Getenv("VAULT_BEDROCK_REGION"),
+		ExtractorModel: os.Getenv("VAULT_EXTRACTOR_MODEL"),
 	}
 }
 

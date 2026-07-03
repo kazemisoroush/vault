@@ -82,6 +82,7 @@ func (h *Handler) createFile(w http.ResponseWriter, r *http.Request) {
 		Name:        req.Name,
 		ContentType: req.ContentType,
 		Size:        req.Size,
+		Status:      domain.StatusPending,
 		Meta:        req.Meta,
 		CreatedAt:   now,
 		UpdatedAt:   now,
