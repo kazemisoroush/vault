@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2 v2.260.0-alpha.0
 	github.com/aws/constructs-go/constructs/v10 v10.6.0
 	github.com/aws/jsii-runtime-go v1.137.0
+	github.com/cdklabs/cdk-nag-go/cdknag/v2 v2.38.2
 )
 
 require (

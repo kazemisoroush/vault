@@ -37,6 +37,14 @@ jobs:
       - name: Test
         working-directory: infra
         run: go test ./...
+      - name: Install CDK
+        run: npm install -g aws-cdk@2
+      - name: Synth (cdk-nag security gate)
+        working-directory: infra
+        run: cdk synth
+        env:
+          CDK_DEFAULT_ACCOUNT: "000000000000"
+          CDK_DEFAULT_REGION: us-east-1
 
   deploy:
     needs: [backend, infra]
