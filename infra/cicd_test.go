@@ -8,8 +8,8 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
-// TestVaultCicdStackTrustsMainBranchOnly checks the deploy role only trusts main.
-func TestVaultCicdStackTrustsMainBranchOnly(t *testing.T) {
+// TestVaultCICDStackTrustsMainBranchOnly checks the deploy role only trusts main.
+func TestVaultCICDStackTrustsMainBranchOnly(t *testing.T) {
 	// Arrange
 	defer jsii.Close()
 	app := awscdk.NewApp(nil)
@@ -19,7 +19,7 @@ func TestVaultCicdStackTrustsMainBranchOnly(t *testing.T) {
 	}
 
 	// Act
-	stack := NewVaultCicdStack(app, "TestCicd", &awscdk.StackProps{Env: env})
+	stack := NewVaultCICDStack(app, "TestCICD", &awscdk.StackProps{Env: env})
 	template := assertions.Template_FromStack(stack, nil)
 
 	// Assert
@@ -43,8 +43,8 @@ func TestVaultCicdStackTrustsMainBranchOnly(t *testing.T) {
 	})
 }
 
-// TestVaultCicdStackScopesDeployToBootstrapRoles checks the role only assumes cdk roles.
-func TestVaultCicdStackScopesDeployToBootstrapRoles(t *testing.T) {
+// TestVaultCICDStackScopesDeployToBootstrapRoles checks the role only assumes cdk roles.
+func TestVaultCICDStackScopesDeployToBootstrapRoles(t *testing.T) {
 	// Arrange
 	defer jsii.Close()
 	app := awscdk.NewApp(nil)
@@ -54,7 +54,7 @@ func TestVaultCicdStackScopesDeployToBootstrapRoles(t *testing.T) {
 	}
 
 	// Act
-	stack := NewVaultCicdStack(app, "TestCicd", &awscdk.StackProps{Env: env})
+	stack := NewVaultCICDStack(app, "TestCICD", &awscdk.StackProps{Env: env})
 	template := assertions.Template_FromStack(stack, nil)
 
 	// Assert

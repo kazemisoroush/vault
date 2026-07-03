@@ -90,7 +90,7 @@ func main() {
 
 	app := awscdk.NewApp(nil)
 	NewVaultStack(app, "VaultStack", nil)
-	NewVaultCicdStack(app, "VaultCicdStack", &awscdk.StackProps{
+	NewVaultCICDStack(app, "VaultCICDStack", &awscdk.StackProps{
 		Env: &awscdk.Environment{
 			Account: jsii.String(os.Getenv("CDK_DEFAULT_ACCOUNT")),
 			Region:  jsii.String(os.Getenv("CDK_DEFAULT_REGION")),

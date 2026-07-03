@@ -9,8 +9,8 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
-// gitHubOidcURL is the GitHub Actions OIDC issuer.
-const gitHubOidcURL = "https://token.actions.githubusercontent.com"
+// gitHubOIDCURL is the GitHub Actions OIDC issuer.
+const gitHubOIDCURL = "https://token.actions.githubusercontent.com"
 
 // gitHubAudience is the audience GitHub sets when requesting AWS credentials.
 const gitHubAudience = "sts.amazonaws.com"
@@ -21,12 +21,12 @@ const deploySubject = "repo:kazemisoroush/vault:ref:refs/heads/main"
 // gitHubThumbprint is the GitHub Actions OIDC root CA thumbprint.
 const gitHubThumbprint = "6938fd4d98bab03faadb97b34396831e3780aea1"
 
-// NewVaultCicdStack defines the OIDC provider and the GitHub Actions deploy role.
-func NewVaultCicdStack(scope constructs.Construct, id string, props *awscdk.StackProps) awscdk.Stack {
+// NewVaultCICDStack defines the OIDC provider and the GitHub Actions deploy role.
+func NewVaultCICDStack(scope constructs.Construct, id string, props *awscdk.StackProps) awscdk.Stack {
 	stack := awscdk.NewStack(scope, &id, props)
 
-	provider := awsiam.NewCfnOIDCProvider(stack, jsii.String("GitHubOidc"), &awsiam.CfnOIDCProviderProps{
-		Url:            jsii.String(gitHubOidcURL),
+	provider := awsiam.NewCfnOIDCProvider(stack, jsii.String("GitHubOIDC"), &awsiam.CfnOIDCProviderProps{
+		Url:            jsii.String(gitHubOIDCURL),
 		ClientIdList:   jsii.Strings(gitHubAudience),
 		ThumbprintList: jsii.Strings(gitHubThumbprint),
 	})
