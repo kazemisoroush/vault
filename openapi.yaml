@@ -116,12 +116,18 @@ components:
   schemas:
     File:
       type: object
-      required: [id, name, contentType, size, createdAt, updatedAt]
+      required: [id, name, contentType, size, status, createdAt, updatedAt]
       properties:
         id: { type: string }
         name: { type: string }
         contentType: { type: string }
         size: { type: integer, format: int64 }
+        status:
+          type: string
+          enum: [pending, ready, failed]
+          description: >
+            Extraction lifecycle. A dropped file is pending until the extractor
+            fills its metadata, then ready, or failed if extraction did not run.
         meta:
           type: object
           additionalProperties: { type: string }

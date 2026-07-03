@@ -3,10 +3,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -16,8 +18,10 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/auth"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
+	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/handler"
 	"github.com/kazemisoroush/vault/backend/internal/index"
+	"github.com/kazemisoroush/vault/backend/internal/ingest"
 )
 
 func main() {
@@ -37,8 +41,42 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure auth: %v", err)
 	}
+	proxy := httpadapter.NewV2(routes).ProxyWithContext
 
-	lambda.Start(httpadapter.NewV2(routes).ProxyWithContext)
+	extractor, err := extract.NewClaudeExtractor(ctx, cfg.BedrockRegion, cfg.ExtractorModel)
+	if err != nil {
+		log.Fatalf("configure extractor: %v", err)
+	}
+	ingester := ingest.New(idx, blobs, extractor)
+
+	lambda.Start(func(ctx context.Context, raw json.RawMessage) (any, error) {
+		if isS3Event(raw) {
+			var event events.S3Event
+			if err := json.Unmarshal(raw, &event); err != nil {
+				return nil, err
+			}
+			return nil, ingester.Handle(ctx, event)
+		}
+
+		var request events.APIGatewayV2HTTPRequest
+		if err := json.Unmarshal(raw, &request); err != nil {
+			return nil, err
+		}
+		return proxy(ctx, request)
+	})
+}
+
+// isS3Event reports whether the raw event is an S3 object-created notification.
+func isS3Event(raw json.RawMessage) bool {
+	var probe struct {
+		Records []struct {
+			EventSource string `json:"eventSource"`
+		} `json:"Records"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return false
+	}
+	return len(probe.Records) > 0 && probe.Records[0].EventSource == "aws:s3"
 }
 
 // guard wraps the routes with JWT auth, failing closed unless auth is opted out.
