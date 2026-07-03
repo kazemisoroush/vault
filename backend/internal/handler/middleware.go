@@ -32,9 +32,9 @@ func RequireAuth(next http.Handler, verifier TokenVerifier) http.Handler {
 // bearerToken extracts the token from an Authorization: Bearer header.
 func bearerToken(r *http.Request) (string, bool) {
 	header := r.Header.Get("Authorization")
-	if !strings.HasPrefix(header, bearerPrefix) {
+	if len(header) < len(bearerPrefix) || !strings.EqualFold(header[:len(bearerPrefix)], bearerPrefix) {
 		return "", false
 	}
-	token := strings.TrimSpace(strings.TrimPrefix(header, bearerPrefix))
+	token := strings.TrimSpace(header[len(bearerPrefix):])
 	return token, token != ""
 }

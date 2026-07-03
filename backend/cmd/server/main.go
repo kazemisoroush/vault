@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 
@@ -41,11 +42,14 @@ func main() {
 	}
 }
 
-// guard wraps the routes with JWT auth when auth is configured.
+// guard wraps the routes with JWT auth, failing closed unless auth is opted out.
 func guard(ctx context.Context, cfg appconfig.Config, routes http.Handler) (http.Handler, error) {
-	if !cfg.AuthEnabled() {
-		log.Print("auth disabled: VAULT_JWT_ISSUER and VAULT_JWT_CLIENT_ID not set")
+	if cfg.AuthDisabled {
+		log.Print("auth explicitly disabled via VAULT_AUTH_DISABLED; serving without authentication")
 		return routes, nil
+	}
+	if !cfg.AuthEnabled() {
+		return nil, errors.New("auth not configured: set VAULT_JWT_ISSUER and VAULT_JWT_CLIENT_ID, or set VAULT_AUTH_DISABLED=true to run without auth")
 	}
 
 	keyFunc, err := auth.NewCognitoKeyFunc(ctx, cfg.JWTIssuer)

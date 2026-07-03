@@ -35,6 +35,7 @@ func TestRequireAuth(t *testing.T) {
 		{name: "health is public", path: "/health", expectCall: false, wantStatus: http.StatusOK, wantNext: true},
 		{name: "missing header is rejected", path: "/files", expectCall: false, wantStatus: http.StatusUnauthorized, wantNext: false},
 		{name: "valid token passes", path: "/files", authHeader: "Bearer good", verifyErr: nil, expectCall: true, wantStatus: http.StatusOK, wantNext: true},
+		{name: "lowercase bearer scheme passes", path: "/files", authHeader: "bearer good", verifyErr: nil, expectCall: true, wantStatus: http.StatusOK, wantNext: true},
 		{name: "invalid token is rejected", path: "/files", authHeader: "Bearer bad", verifyErr: errors.New("nope"), expectCall: true, wantStatus: http.StatusUnauthorized, wantNext: false},
 	}
 

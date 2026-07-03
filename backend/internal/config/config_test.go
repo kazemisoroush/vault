@@ -38,6 +38,21 @@ func TestServerAddrFallsBackToDefault(t *testing.T) {
 	assert.Equal(t, ":8080", cfg.ServerAddr())
 }
 
+// TestAuthDisabledReadsOptOutFlag checks the explicit auth opt-out.
+func TestAuthDisabledReadsOptOutFlag(t *testing.T) {
+	// Arrange
+	t.Setenv("VAULT_AUTH_DISABLED", "true")
+
+	// Act & Assert
+	assert.True(t, Load().AuthDisabled)
+
+	// Arrange
+	t.Setenv("VAULT_AUTH_DISABLED", "")
+
+	// Act & Assert
+	assert.False(t, Load().AuthDisabled)
+}
+
 // TestAuthEnabledRequiresBothIssuerAndClient checks the auth toggle.
 func TestAuthEnabledRequiresBothIssuerAndClient(t *testing.T) {
 	// Arrange

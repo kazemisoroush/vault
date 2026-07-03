@@ -7,7 +7,7 @@ import (
 	"github.com/cdklabs/cdk-nag-go/cdknag/v2"
 )
 
-// suppressNag records the cdk-nag rules Vault intentionally defers, with reasons.
+// suppressNag records the cdk-nag rules Vault accepts by design or defers, with the reason for each.
 func suppressNag(stack awscdk.Stack, healthRoute constructs.IConstruct) {
 	cdknag.NagSuppressions_AddStackSuppressions(stack, &[]*cdknag.NagPackSuppression{
 		{
