@@ -16,7 +16,7 @@ Return ONLY a flat JSON object mapping string keys to string values that a perso
 for example vendor, amount, date, place, person, event, or document type.
 Use whatever keys the file actually carries. No nesting, no arrays, no commentary.`
 
-// maxTokens caps the model reply; a flat metadata object is small.
+// maxTokens caps the model reply to the size of a small flat metadata object.
 const maxTokens = 1024
 
 // ClaudeExtractor extracts metadata using Claude on Amazon Bedrock.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -53,20 +54,24 @@ func main() {
 		if isS3Event(raw) {
 			var event events.S3Event
 			if err := json.Unmarshal(raw, &event); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unmarshal S3 event: %w", err)
 			}
 			return nil, ingester.Handle(ctx, event)
 		}
 
 		var request events.APIGatewayV2HTTPRequest
 		if err := json.Unmarshal(raw, &request); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal API request: %w", err)
 		}
-		return proxy(ctx, request)
+		resp, err := proxy(ctx, request)
+		if err != nil {
+			return resp, fmt.Errorf("proxy request: %w", err)
+		}
+		return resp, nil
 	})
 }
 
-// isS3Event reports whether the raw event is an S3 object-created notification.
+// isS3Event reports whether the raw event is an S3 event.
 func isS3Event(raw json.RawMessage) bool {
 	var probe struct {
 		Records []struct {

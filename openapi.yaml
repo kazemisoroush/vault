@@ -127,7 +127,7 @@ components:
           enum: [pending, ready, failed]
           description: >
             Extraction lifecycle. A dropped file is pending until the extractor
-            fills its metadata, then ready, or failed if extraction did not run.
+            fills its metadata, then ready, or failed if the extractor errored.
         meta:
           type: object
           additionalProperties: { type: string }
