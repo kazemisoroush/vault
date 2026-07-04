@@ -47,7 +47,7 @@ func TestRequireAuth(t *testing.T) {
 				verifier.EXPECT().Verify(gomock.Any()).Return(tc.verifyErr)
 			}
 			reached := false
-			mw := middleware.RequireAuth(okNext(&reached), verifier)
+			mw := middleware.NewAuthMiddleware(verifier).Wrap(okNext(&reached))
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			if tc.authHeader != "" {
 				req.Header.Set("Authorization", tc.authHeader)
@@ -67,7 +67,7 @@ func TestRequireAuth(t *testing.T) {
 func TestRecoverTurnsPanicInto500(t *testing.T) {
 	// Arrange
 	boom := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") })
-	mw := middleware.Recover(boom)
+	mw := middleware.NewRecoverMiddleware().Wrap(boom)
 	rec := httptest.NewRecorder()
 
 	// Act

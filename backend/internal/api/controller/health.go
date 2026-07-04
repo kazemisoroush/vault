@@ -2,14 +2,14 @@ package controller
 
 import "net/http"
 
-// Health reports service liveness.
-type Health struct{}
+// HealthController reports service liveness.
+type HealthController struct{}
 
-// NewHealth builds a Health controller.
-func NewHealth() *Health {
-	return &Health{}
+// NewHealthController builds a health controller.
+func NewHealthController() *HealthController {
+	return &HealthController{}
 }
 
-func (c *Health) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+func (c *HealthController) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

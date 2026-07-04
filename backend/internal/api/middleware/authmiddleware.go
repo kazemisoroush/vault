@@ -8,8 +8,18 @@ import (
 
 const bearerPrefix = "Bearer "
 
-// RequireAuth rejects requests without a valid bearer token, leaving /health open.
-func RequireAuth(next http.Handler, verifier TokenVerifier) http.Handler {
+// AuthMiddleware rejects requests without a valid bearer token, leaving /health open.
+type AuthMiddleware struct {
+	verifier TokenVerifier
+}
+
+// NewAuthMiddleware builds an AuthMiddleware over a token verifier.
+func NewAuthMiddleware(verifier TokenVerifier) *AuthMiddleware {
+	return &AuthMiddleware{verifier: verifier}
+}
+
+// Wrap gates the next handler behind bearer-token verification.
+func (m *AuthMiddleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			next.ServeHTTP(w, r)
@@ -21,7 +31,7 @@ func RequireAuth(next http.Handler, verifier TokenVerifier) http.Handler {
 			unauthorized(w, "missing bearer token")
 			return
 		}
-		if err := verifier.Verify(token); err != nil {
+		if err := m.verifier.Verify(token); err != nil {
 			unauthorized(w, "invalid token")
 			return
 		}

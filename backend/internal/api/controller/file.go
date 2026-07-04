@@ -13,21 +13,21 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/index"
 )
 
-// File serves the five CRUD verbs over file records and their blobs.
-type File struct {
+// FileController serves the five CRUD verbs over file records and their blobs.
+type FileController struct {
 	index index.Index
 	blobs blob.Store
 	now   func() time.Time
 	newID func() string
 }
 
-// NewFile builds a File controller with a real clock and id generator.
-func NewFile(idx index.Index, blobs blob.Store) *File {
-	return &File{index: idx, blobs: blobs, now: time.Now, newID: uuid.NewString}
+// NewFileController builds a file controller with a real clock and id generator.
+func NewFileController(idx index.Index, blobs blob.Store) *FileController {
+	return &FileController{index: idx, blobs: blobs, now: time.Now, newID: uuid.NewString}
 }
 
 // Drop registers a file record and returns a presigned upload URL.
-func (c *File) Drop(w http.ResponseWriter, r *http.Request) {
+func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 	var req dropRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -66,7 +66,7 @@ func (c *File) Drop(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get returns one file record and a presigned download URL.
-func (c *File) Get(w http.ResponseWriter, r *http.Request) {
+func (c *FileController) Get(w http.ResponseWriter, r *http.Request) {
 	file, ok := lookup(w, r, c.index)
 	if !ok {
 		return
@@ -82,7 +82,7 @@ func (c *File) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // List returns one page of file records.
-func (c *File) List(w http.ResponseWriter, r *http.Request) {
+func (c *FileController) List(w http.ResponseWriter, r *http.Request) {
 	limit := defaultLimit
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		parsed, err := strconv.ParseInt(raw, 10, 32)
@@ -103,7 +103,7 @@ func (c *File) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update changes a file's name or free-form metadata.
-func (c *File) Update(w http.ResponseWriter, r *http.Request) {
+func (c *FileController) Update(w http.ResponseWriter, r *http.Request) {
 	file, ok := lookup(w, r, c.index)
 	if !ok {
 		return
@@ -140,7 +140,7 @@ func (c *File) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete removes a file record and its bytes.
-func (c *File) Delete(w http.ResponseWriter, r *http.Request) {
+func (c *FileController) Delete(w http.ResponseWriter, r *http.Request) {
 	file, ok := lookup(w, r, c.index)
 	if !ok {
 		return

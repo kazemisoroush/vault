@@ -17,15 +17,15 @@ import (
 // New builds the API handler: controllers behind the router, wrapped in middleware.
 func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store) (http.Handler, error) {
 	router := NewRouter(
-		controller.NewFile(idx, blobs),
-		controller.NewHealth(),
+		controller.NewFileController(idx, blobs),
+		controller.NewHealthController(),
 	)
 
 	authed, err := authenticate(ctx, cfg, router)
 	if err != nil {
 		return nil, err
 	}
-	return middleware.Recover(authed), nil
+	return middleware.NewRecoverMiddleware().Wrap(authed), nil
 }
 
 // authenticate wraps the router with JWT auth, failing closed unless opted out.
@@ -43,5 +43,5 @@ func authenticate(ctx context.Context, cfg config.Config, routes http.Handler) (
 		return nil, err
 	}
 	verifier := auth.NewVerifier(cfg.JWTIssuer, cfg.JWTClientID, keyFunc)
-	return middleware.RequireAuth(routes, verifier), nil
+	return middleware.NewAuthMiddleware(verifier).Wrap(routes), nil
 }

@@ -13,7 +13,7 @@ type Router struct {
 }
 
 // NewRouter wires each endpoint to a controller method.
-func NewRouter(files *controller.File, health *controller.Health) *Router {
+func NewRouter(files *controller.FileController, health *controller.HealthController) *Router {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /files", files.Drop)
 	mux.HandleFunc("GET /files", files.List)
