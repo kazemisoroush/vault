@@ -139,3 +139,36 @@ button.link {
 .muted {
   color: #6a7180;
 }
+
+.ask {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.2rem;
+}
+
+.ask input {
+  flex: 1;
+}
+
+.results {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.results a {
+  color: #3b5670;
+  text-decoration: none;
+}
+
+.results a:hover {
+  text-decoration: underline;
+}
+
+.drop {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e5ea;
+}

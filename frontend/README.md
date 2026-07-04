@@ -7,10 +7,12 @@ File bytes move through the presigned URLs the API hands out.
 
 ## Layout
 
-- `app/`: routes `/login` (Cognito sign in) and `/` (the auth-guarded home,
-  which is the drop surface: drag a file in and it uploads and lists with its
-  status). The read side, an ask box, lands in the next issue.
-- `components/`: the presentational pieces, a `DropZone` and a `FileList`.
+- `app/`: routes `/login` (Cognito sign in) and `/` (the auth-guarded home).
+  The home both asks and drops: an ask box for natural-language retrieval on
+  top, and a drop surface below where a dragged file uploads and lists with its
+  status.
+- `components/`: the presentational pieces, an `AskBox` and `Results` for the
+  read side, and a `DropZone` and `FileList` for the write side.
 - `lib/config.ts`: the config layer. It reads `/config.json` at runtime, so the
   static build carries no environment-specific values.
 - `lib/api/`: the typed API client. `schema.ts` is generated from
@@ -18,6 +20,7 @@ File bytes move through the presigned URLs the API hands out.
 - `lib/auth/`: the Cognito boundary and the React auth context.
 - `lib/files/`: the file operations, `dropFile` (register then upload), the
   presigned `upload` PUT, and `listFiles`.
+- `lib/ask/`: the natural-language retrieval call, `ask`, over the typed client.
 
 ## Config
 

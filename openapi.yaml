@@ -95,6 +95,25 @@ paths:
           description: Deleted.
         '404':
           $ref: '#/components/responses/NotFound'
+  /ask:
+    post:
+      operationId: ask
+      summary: Find files matching a natural-language query.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskRequest'
+      responses:
+        '200':
+          description: Matching files, most relevant first, each with a download URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /health:
     get:
       operationId: health
@@ -171,6 +190,24 @@ components:
         meta:
           type: object
           additionalProperties: { type: string }
+    AskRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string }
+    AskResult:
+      type: object
+      required: [file, downloadUrl]
+      properties:
+        file: { $ref: '#/components/schemas/File' }
+        downloadUrl: { type: string }
+    AskResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/AskResult' }
     Error:
       type: object
       required: [error]
