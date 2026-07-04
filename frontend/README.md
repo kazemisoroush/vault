@@ -9,10 +9,11 @@ File bytes move through the presigned URLs the API hands out.
 
 - `app/`: routes `/login` (Cognito sign in) and `/` (the auth-guarded home).
   The home both asks and drops: an ask box for natural-language retrieval on
-  top, and a drop surface below where a dragged file uploads and lists with its
-  status.
+  top, a drop surface below, and a trace of recent LLM calls at the bottom so
+  the model's work is visible.
 - `components/`: the presentational pieces, an `AskBox` and `Results` for the
-  read side, and a `DropZone` and `FileList` for the write side.
+  read side, a `DropZone` and `FileList` for the write side, and a `Trace` for
+  the recent LLM calls.
 - `lib/config.ts`: the config layer. It reads `/config.json` at runtime, so the
   static build carries no environment-specific values.
 - `lib/api/`: the typed API client. `schema.ts` is generated from
@@ -21,6 +22,7 @@ File bytes move through the presigned URLs the API hands out.
 - `lib/files/`: the file operations, `dropFile` (register then upload), the
   presigned `upload` PUT, and `listFiles`.
 - `lib/ask/`: the natural-language retrieval call, `ask`, over the typed client.
+- `lib/calls/`: the recent LLM call trace, `listCalls`, over the typed client.
 
 ## Config
 

@@ -21,9 +21,10 @@ func TestNewFailsClosedWhenAuthNotConfigured(t *testing.T) {
 	idx := mocks.NewMockIndex(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
 	retriever := mocks.NewMockRetriever(ctrl)
+	callLister := mocks.NewMockCallLister(ctrl)
 
 	// Act
-	_, err := api.New(context.Background(), config.Config{}, idx, blobs, retriever)
+	_, err := api.New(context.Background(), config.Config{}, idx, blobs, retriever, callLister)
 
 	// Assert
 	assert.Error(t, err)
@@ -35,10 +36,11 @@ func TestNewAuthDisabledServesDataRoute(t *testing.T) {
 	idx := mocks.NewMockIndex(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
 	retriever := mocks.NewMockRetriever(ctrl)
+	callLister := mocks.NewMockCallLister(ctrl)
 	idx.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", nil)
 
 	// Act
-	handler, err := api.New(context.Background(), config.Config{AuthDisabled: true}, idx, blobs, retriever)
+	handler, err := api.New(context.Background(), config.Config{AuthDisabled: true}, idx, blobs, retriever, callLister)
 	require.NoError(t, err)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/files", nil))

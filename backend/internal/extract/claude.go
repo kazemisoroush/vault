@@ -26,13 +26,14 @@ type ClaudeExtractor struct {
 }
 
 // NewClaudeExtractor builds a ClaudeExtractor for a Bedrock region and model.
-func NewClaudeExtractor(_ context.Context, region, model string) (*ClaudeExtractor, error) {
-	return &ClaudeExtractor{model: llm.NewModel(region, model)}, nil
+func NewClaudeExtractor(_ context.Context, region, model string, recorder llm.Recorder) (*ClaudeExtractor, error) {
+	return &ClaudeExtractor{model: llm.NewModel(region, model, "extract", recorder)}, nil
 }
 
 // Extract sends the file to the model and returns its flat metadata map.
 func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentType string) (map[string]string, error) {
-	reply, err := e.model.Complete(ctx, maxTokens, fileBlock(content, contentType), anthropic.NewTextBlock(instruction))
+	prompt := fmt.Sprintf("%s\n\n[file: %s, %d bytes]", instruction, contentType, len(content))
+	reply, err := e.model.Complete(ctx, prompt, maxTokens, fileBlock(content, contentType), anthropic.NewTextBlock(instruction))
 	if err != nil {
 		return nil, fmt.Errorf("bedrock extract: %w", err)
 	}

@@ -60,6 +60,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recent LLM calls, the trace of what the model did. */
+        get: operations["listCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -137,6 +154,25 @@ export interface components {
         };
         AskResponse: {
             results: components["schemas"]["AskResult"][];
+        };
+        LlmCall: {
+            op: string;
+            model: string;
+            prompt?: string;
+            reply?: string;
+            /** Format: int64 */
+            inputTokens: number;
+            /** Format: int64 */
+            outputTokens: number;
+            /** Format: int64 */
+            latencyMs: number;
+            ok: boolean;
+            error?: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CallsResponse: {
+            calls: components["schemas"]["LlmCall"][];
         };
         Error: {
             error: string;
@@ -310,6 +346,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AskResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    listCalls: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent LLM calls, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallsResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
