@@ -44,6 +44,16 @@ func (t *Transport) Handle(ctx context.Context, raw json.RawMessage) (any, error
 	return resp, nil
 }
 
+// s3EventProbe sniffs just enough of a raw event to detect an S3 notification.
+type s3EventProbe struct {
+	Records []s3EventProbeRecord `json:"Records"`
+}
+
+// s3EventProbeRecord carries one record's event source.
+type s3EventProbeRecord struct {
+	EventSource string `json:"eventSource"`
+}
+
 // isS3Event reports whether the raw event is an S3 event.
 func isS3Event(raw json.RawMessage) bool {
 	var probe s3EventProbe

@@ -26,6 +26,20 @@ func NewFileController(idx index.Index, blobs blob.Store) *FileController {
 	return &FileController{index: idx, blobs: blobs, now: time.Now, newID: uuid.NewString}
 }
 
+// dropRequest is the body of a POST /files call.
+type dropRequest struct {
+	Name        string            `json:"name"`
+	ContentType string            `json:"contentType"`
+	Size        int64             `json:"size"`
+	Meta        map[string]string `json:"meta"`
+}
+
+// dropResponse is the body returned by a POST /files call.
+type dropResponse struct {
+	File      domain.File `json:"file"`
+	UploadURL string      `json:"uploadUrl"`
+}
+
 // Drop registers a file record and returns a presigned upload URL.
 func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 	var req dropRequest
@@ -65,6 +79,12 @@ func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, dropResponse{File: file, UploadURL: uploadURL})
 }
 
+// getResponse is the body returned by a GET /files/{id} call.
+type getResponse struct {
+	File        domain.File `json:"file"`
+	DownloadURL string      `json:"downloadUrl"`
+}
+
 // Get returns one file record and a presigned download URL.
 func (c *FileController) Get(w http.ResponseWriter, r *http.Request) {
 	file, ok := lookup(w, r, c.index)
@@ -79,6 +99,12 @@ func (c *FileController) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, getResponse{File: file, DownloadURL: downloadURL})
+}
+
+// listResponse is the body returned by a GET /files call.
+type listResponse struct {
+	Files  []domain.File `json:"files"`
+	Cursor string        `json:"cursor,omitempty"`
 }
 
 // List returns one page of file records.
@@ -100,6 +126,12 @@ func (c *FileController) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, listResponse{Files: files, Cursor: cursor})
+}
+
+// updateRequest is the body of a PATCH /files/{id} call.
+type updateRequest struct {
+	Name *string            `json:"name"`
+	Meta *map[string]string `json:"meta"`
 }
 
 // Update changes a file's name or free-form metadata.
