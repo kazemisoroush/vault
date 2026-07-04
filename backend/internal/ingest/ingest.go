@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -16,8 +15,6 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 )
-
-const keyPrefix = "files/"
 
 // Handler fills a file's metadata after it lands in S3.
 type Handler struct {
@@ -48,7 +45,7 @@ func (h *Handler) Handle(ctx context.Context, event events.S3Event) error {
 
 // handleKey extracts metadata for one object and updates its record.
 func (h *Handler) handleKey(ctx context.Context, key string) error {
-	id := strings.TrimPrefix(key, keyPrefix)
+	id := domain.IDFromKey(key)
 
 	file, err := h.index.Get(ctx, id)
 	if err != nil {

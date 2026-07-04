@@ -22,6 +22,9 @@ import (
 // extractorModel is the Bedrock Claude inference profile that fills metadata on drop.
 const extractorModel = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
+// filesKeyPrefix is the S3 key namespace for blobs; it must match domain.keyPrefix in the backend.
+const filesKeyPrefix = "files/"
+
 // NewVaultStack defines the S3 bucket, DynamoDB index and API Lambda.
 func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackProps) awscdk.Stack {
 	stack := awscdk.NewStack(scope, &id, props)
@@ -105,7 +108,7 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 	bucket.AddEventNotification(
 		awss3.EventType_OBJECT_CREATED,
 		awss3notifications.NewLambdaDestination(fn),
-		&awss3.NotificationKeyFilter{Prefix: jsii.String("files/")},
+		&awss3.NotificationKeyFilter{Prefix: jsii.String(filesKeyPrefix)},
 	)
 
 	api := awsapigatewayv2.NewHttpApi(stack, jsii.String("HttpApi"), &awsapigatewayv2.HttpApiProps{

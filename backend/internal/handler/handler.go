@@ -87,7 +87,7 @@ func (h *Handler) createFile(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	file.Key = "files/" + file.ID
+	file.Key = domain.Key(file.ID)
 
 	uploadURL, err := h.blobs.PresignPut(r.Context(), file.Key, file.ContentType, presignExpiry)
 	if err != nil {
