@@ -14,6 +14,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/index"
+	"github.com/kazemisoroush/vault/backend/internal/retrieve"
 )
 
 func main() {
@@ -28,7 +29,12 @@ func main() {
 	idx := index.NewDynamoIndex(dynamodb.NewFromConfig(awsCfg), cfg.Table)
 	blobs := blob.NewS3Store(s3.NewFromConfig(awsCfg), cfg.Bucket)
 
-	apiHandler, err := api.New(ctx, cfg, idx, blobs)
+	retriever, err := retrieve.NewClaudeRetriever(ctx, cfg.BedrockRegion, cfg.ExtractorModel)
+	if err != nil {
+		log.Fatalf("configure retriever: %v", err)
+	}
+
+	apiHandler, err := api.New(ctx, cfg, idx, blobs, retriever)
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}

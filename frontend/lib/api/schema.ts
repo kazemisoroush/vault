@@ -43,6 +43,23 @@ export interface paths {
         patch: operations["updateFile"];
         trace?: never;
     };
+    "/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Find files matching a natural-language query. */
+        post: operations["ask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -110,6 +127,16 @@ export interface components {
             meta?: {
                 [key: string]: string;
             };
+        };
+        AskRequest: {
+            query: string;
+        };
+        AskResult: {
+            file: components["schemas"]["File"];
+            downloadUrl: string;
+        };
+        AskResponse: {
+            results: components["schemas"]["AskResult"][];
         };
         Error: {
             error: string;
@@ -261,6 +288,31 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Matching files, most relevant first, each with a download URL. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
         };
     };
     health: {

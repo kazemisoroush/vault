@@ -13,12 +13,14 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/index"
+	"github.com/kazemisoroush/vault/backend/internal/retrieve"
 )
 
 // New builds the API handler: controllers behind the router, wrapped in middleware.
-func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store) (http.Handler, error) {
+func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, retriever retrieve.Retriever) (http.Handler, error) {
 	router := NewRouter(
 		controller.NewFileController(idx, blobs),
+		controller.NewAskController(idx, blobs, retriever),
 		controller.NewHealthController(),
 	)
 

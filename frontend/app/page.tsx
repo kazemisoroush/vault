@@ -3,8 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AskBox } from "../components/AskBox";
 import { DropZone } from "../components/DropZone";
 import { FileList } from "../components/FileList";
+import { Results } from "../components/Results";
+import { ask } from "../lib/ask/ask";
+import type { AskResult } from "../lib/ask/askResult";
 import { useAuth } from "../lib/auth/context";
 import { dropFile } from "../lib/files/dropFile";
 import { listFiles } from "../lib/files/listFiles";
@@ -18,6 +22,8 @@ export default function Home() {
   const [files, setFiles] = useState<VaultFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<AskResult[] | null>(null);
+  const [asking, setAsking] = useState(false);
 
   useEffect(() => {
     if (ready && !authenticated) {
@@ -58,6 +64,22 @@ export default function Home() {
     [api, refresh],
   );
 
+  const onAsk = useCallback(
+    async (query: string) => {
+      if (!api) return;
+      setAsking(true);
+      setError(null);
+      try {
+        setResults(await ask(api, query));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "search failed");
+      } finally {
+        setAsking(false);
+      }
+    },
+    [api],
+  );
+
   if (!ready) {
     return (
       <main>
@@ -77,9 +99,13 @@ export default function Home() {
           Sign out
         </button>
       </header>
-      <DropZone onFile={onFile} busy={busy} />
+      <AskBox onAsk={onAsk} busy={asking} />
+      {results !== null && <Results results={results} />}
       {error && <p role="alert">{error}</p>}
-      <FileList files={files} />
+      <section className="drop">
+        <DropZone onFile={onFile} busy={busy} />
+        <FileList files={files} />
+      </section>
     </main>
   );
 }
