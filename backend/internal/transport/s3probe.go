@@ -4,8 +4,3 @@ package transport
 type s3EventProbe struct {
 	Records []s3EventProbeRecord `json:"Records"`
 }
-
-// s3EventProbeRecord carries one record's event source.
-type s3EventProbeRecord struct {
-	EventSource string `json:"eventSource"`
-}

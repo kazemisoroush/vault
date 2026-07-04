@@ -1,4 +1,4 @@
-// Package controller holds one HTTP controller per API endpoint.
+// Package controller holds the HTTP controllers, one per resource concept.
 package controller
 
 import (
