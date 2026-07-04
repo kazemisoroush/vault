@@ -1,0 +1,46 @@
+package api_test
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	"github.com/kazemisoroush/vault/backend/internal/api"
+	"github.com/kazemisoroush/vault/backend/internal/config"
+	"github.com/kazemisoroush/vault/backend/internal/mocks"
+)
+
+func TestNewFailsClosedWhenAuthNotConfigured(t *testing.T) {
+	// Arrange
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	blobs := mocks.NewMockStore(ctrl)
+
+	// Act
+	_, err := api.New(context.Background(), config.Config{}, idx, blobs)
+
+	// Assert
+	assert.Error(t, err)
+}
+
+func TestNewAuthDisabledServesDataRoute(t *testing.T) {
+	// Arrange
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	blobs := mocks.NewMockStore(ctrl)
+	idx.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", nil)
+
+	// Act
+	handler, err := api.New(context.Background(), config.Config{AuthDisabled: true}, idx, blobs)
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/files", nil))
+
+	// Assert
+	assert.Equal(t, http.StatusOK, rec.Code)
+}

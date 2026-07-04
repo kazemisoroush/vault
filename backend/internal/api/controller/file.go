@@ -1,10 +1,7 @@
-// Package handler exposes the five Vault verbs over HTTP.
-package handler
+package controller
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,57 +13,36 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/index"
 )
 
-const (
-	defaultLimit  = int32(25)
-	maxLimit      = int32(100)
-	presignExpiry = 15 * time.Minute
-)
-
-// Handler routes the API to the index and the blob store.
-type Handler struct {
+// FileController serves the five CRUD verbs over file records and their blobs.
+type FileController struct {
 	index index.Index
 	blobs blob.Store
 	now   func() time.Time
 	newID func() string
 }
 
-// New builds a Handler with real clock and id generator.
-func New(idx index.Index, blobs blob.Store) *Handler {
-	return &Handler{
-		index: idx,
-		blobs: blobs,
-		now:   time.Now,
-		newID: uuid.NewString,
-	}
+// NewFileController builds a file controller with a real clock and id generator.
+func NewFileController(idx index.Index, blobs blob.Store) *FileController {
+	return &FileController{index: idx, blobs: blobs, now: time.Now, newID: uuid.NewString}
 }
 
-// Routes returns the HTTP mux for all endpoints.
-func (h *Handler) Routes() *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /files", h.createFile)
-	mux.HandleFunc("GET /files", h.listFiles)
-	mux.HandleFunc("GET /files/{id}", h.getFile)
-	mux.HandleFunc("PATCH /files/{id}", h.updateFile)
-	mux.HandleFunc("DELETE /files/{id}", h.deleteFile)
-	mux.HandleFunc("GET /health", h.health)
-
-	return mux
-}
-
-type createRequest struct {
+// dropRequest is the body of a POST /files call.
+type dropRequest struct {
 	Name        string            `json:"name"`
 	ContentType string            `json:"contentType"`
 	Size        int64             `json:"size"`
 	Meta        map[string]string `json:"meta"`
 }
 
-type createResponse struct {
+// dropResponse is the body returned by a POST /files call.
+type dropResponse struct {
 	File      domain.File `json:"file"`
 	UploadURL string      `json:"uploadUrl"`
 }
 
-func (h *Handler) createFile(w http.ResponseWriter, r *http.Request) {
-	var req createRequest
+// Drop registers a file record and returns a presigned upload URL.
+func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
+	var req dropRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
@@ -76,9 +52,9 @@ func (h *Handler) createFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := h.now().UTC()
+	now := c.now().UTC()
 	file := domain.File{
-		ID:          h.newID(),
+		ID:          c.newID(),
 		Name:        req.Name,
 		ContentType: req.ContentType,
 		Size:        req.Size,
@@ -87,34 +63,36 @@ func (h *Handler) createFile(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	file.Key = "files/" + file.ID
+	file.Key = blob.Key(file.ID)
 
-	uploadURL, err := h.blobs.PresignPut(r.Context(), file.Key, file.ContentType, presignExpiry)
+	uploadURL, err := c.blobs.PresignPut(r.Context(), file.Key, file.ContentType, presignExpiry)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not presign upload")
 		return
 	}
 
-	if err := h.index.Put(r.Context(), file); err != nil {
+	if err := c.index.Put(r.Context(), file); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not save file record")
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, createResponse{File: file, UploadURL: uploadURL})
+	writeJSON(w, http.StatusCreated, dropResponse{File: file, UploadURL: uploadURL})
 }
 
+// getResponse is the body returned by a GET /files/{id} call.
 type getResponse struct {
 	File        domain.File `json:"file"`
 	DownloadURL string      `json:"downloadUrl"`
 }
 
-func (h *Handler) getFile(w http.ResponseWriter, r *http.Request) {
-	file, ok := h.lookup(w, r)
+// Get returns one file record and a presigned download URL.
+func (c *FileController) Get(w http.ResponseWriter, r *http.Request) {
+	file, ok := lookup(w, r, c.index)
 	if !ok {
 		return
 	}
 
-	downloadURL, err := h.blobs.PresignGet(r.Context(), file.Key, presignExpiry)
+	downloadURL, err := c.blobs.PresignGet(r.Context(), file.Key, presignExpiry)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not presign download")
 		return
@@ -123,12 +101,14 @@ func (h *Handler) getFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, getResponse{File: file, DownloadURL: downloadURL})
 }
 
+// listResponse is the body returned by a GET /files call.
 type listResponse struct {
 	Files  []domain.File `json:"files"`
 	Cursor string        `json:"cursor,omitempty"`
 }
 
-func (h *Handler) listFiles(w http.ResponseWriter, r *http.Request) {
+// List returns one page of file records.
+func (c *FileController) List(w http.ResponseWriter, r *http.Request) {
 	limit := defaultLimit
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		parsed, err := strconv.ParseInt(raw, 10, 32)
@@ -139,7 +119,7 @@ func (h *Handler) listFiles(w http.ResponseWriter, r *http.Request) {
 		limit = min(int32(parsed), maxLimit)
 	}
 
-	files, cursor, err := h.index.List(r.Context(), limit, r.URL.Query().Get("cursor"))
+	files, cursor, err := c.index.List(r.Context(), limit, r.URL.Query().Get("cursor"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not list files")
 		return
@@ -148,13 +128,15 @@ func (h *Handler) listFiles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, listResponse{Files: files, Cursor: cursor})
 }
 
+// updateRequest is the body of a PATCH /files/{id} call.
 type updateRequest struct {
 	Name *string            `json:"name"`
 	Meta *map[string]string `json:"meta"`
 }
 
-func (h *Handler) updateFile(w http.ResponseWriter, r *http.Request) {
-	file, ok := h.lookup(w, r)
+// Update changes a file's name or free-form metadata.
+func (c *FileController) Update(w http.ResponseWriter, r *http.Request) {
+	file, ok := lookup(w, r, c.index)
 	if !ok {
 		return
 	}
@@ -179,9 +161,9 @@ func (h *Handler) updateFile(w http.ResponseWriter, r *http.Request) {
 	if req.Meta != nil {
 		file.Meta = *req.Meta
 	}
-	file.UpdatedAt = h.now().UTC()
+	file.UpdatedAt = c.now().UTC()
 
-	if err := h.index.Put(r.Context(), file); err != nil {
+	if err := c.index.Put(r.Context(), file); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not save file record")
 		return
 	}
@@ -189,51 +171,22 @@ func (h *Handler) updateFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, file)
 }
 
-func (h *Handler) deleteFile(w http.ResponseWriter, r *http.Request) {
-	file, ok := h.lookup(w, r)
+// Delete removes a file record and its bytes.
+func (c *FileController) Delete(w http.ResponseWriter, r *http.Request) {
+	file, ok := lookup(w, r, c.index)
 	if !ok {
 		return
 	}
 
-	if err := h.index.Delete(r.Context(), file.ID); err != nil {
+	if err := c.index.Delete(r.Context(), file.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not delete file record")
 		return
 	}
 
-	if err := h.blobs.Delete(r.Context(), file.Key); err != nil {
+	if err := c.blobs.Delete(r.Context(), file.Key); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not delete file bytes")
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func (h *Handler) lookup(w http.ResponseWriter, r *http.Request) (domain.File, bool) {
-	file, err := h.index.Get(r.Context(), r.PathValue("id"))
-	if err != nil {
-		if errors.Is(err, index.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "file not found")
-			return domain.File{}, false
-		}
-		writeError(w, http.StatusInternalServerError, "could not read file record")
-		return domain.File{}, false
-	}
-
-	return file, true
-}
-
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		fmt.Printf("write response: %v\n", err)
-	}
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }
