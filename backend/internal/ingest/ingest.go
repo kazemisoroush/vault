@@ -45,7 +45,7 @@ func (h *Handler) Handle(ctx context.Context, event events.S3Event) error {
 
 // handleKey extracts metadata for one object and updates its record.
 func (h *Handler) handleKey(ctx context.Context, key string) error {
-	id := domain.IDFromKey(key)
+	id := blob.IDFromKey(key)
 
 	file, err := h.index.Get(ctx, id)
 	if err != nil {
