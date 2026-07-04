@@ -2,6 +2,8 @@ package calls
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
@@ -54,8 +56,9 @@ func (c *DynamoCalls) Record(ctx context.Context, call llm.Call) {
 
 	stamp := call.CreatedAt.Format(time.RFC3339Nano)
 	record := item{
-		PK:           partition,
-		SK:           stamp,
+		PK: partition,
+		// A random suffix keeps the sort key unique even for calls in the same instant.
+		SK:           stamp + "#" + randomSuffix(),
 		TTL:          call.CreatedAt.Add(retention).Unix(),
 		Op:           call.Op,
 		Model:        call.Model,
@@ -76,6 +79,15 @@ func (c *DynamoCalls) Record(ctx context.Context, call llm.Call) {
 	if _, err := c.client.PutItem(ctx, &dynamodb.PutItemInput{TableName: aws.String(c.table), Item: av}); err != nil {
 		log.Printf("record llm call: put: %v", err)
 	}
+}
+
+// randomSuffix returns a short random hex string for sort-key uniqueness.
+func randomSuffix() string {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "0"
+	}
+	return hex.EncodeToString(b[:])
 }
 
 // List returns the most recent calls, newest first.
