@@ -65,8 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [auth]);
 
   const api = useMemo(
-    () => (config ? createApiClient(config, () => token) : null),
-    [config, token],
+    () => (config ? createApiClient(config, () => token, signOut) : null),
+    [config, token, signOut],
   );
 
   const value: AuthState = { ready, authenticated: token !== null, signIn, signOut, api };
