@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 )
 
@@ -16,11 +15,6 @@ type List struct {
 // NewList builds a List controller.
 func NewList(idx index.Index) *List {
 	return &List{index: idx}
-}
-
-type listResponse struct {
-	Files  []domain.File `json:"files"`
-	Cursor string        `json:"cursor,omitempty"`
 }
 
 func (c *List) ServeHTTP(w http.ResponseWriter, r *http.Request) {

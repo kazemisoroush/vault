@@ -1,15 +1,19 @@
 // Package api assembles the HTTP router, controllers, and middleware.
 package api
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/kazemisoroush/vault/backend/internal/api/controller"
+)
 
 // Router maps HTTP endpoints to their controllers.
 type Router struct {
 	mux *http.ServeMux
 }
 
-// NewRouter wires each endpoint to its controller.
-func NewRouter(drop, list, get, update, remove, health http.Handler) *Router {
+// NewRouter wires each endpoint to its controller. Distinct types make a mis-order a compile error.
+func NewRouter(drop *controller.Drop, list *controller.List, get *controller.Get, update *controller.Update, remove *controller.Delete, health *controller.Health) *Router {
 	mux := http.NewServeMux()
 	mux.Handle("POST /files", drop)
 	mux.Handle("GET /files", list)

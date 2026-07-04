@@ -22,7 +22,7 @@ import (
 // extractorModel is the Bedrock Claude inference profile that fills metadata on drop.
 const extractorModel = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
-// filesKeyPrefix is the S3 key namespace for blobs; it must match domain.keyPrefix in the backend.
+// filesKeyPrefix is the S3 key namespace for blobs; it must match blob.keyPrefix in the backend.
 const filesKeyPrefix = "files/"
 
 // NewVaultStack defines the S3 bucket, DynamoDB index and API Lambda.

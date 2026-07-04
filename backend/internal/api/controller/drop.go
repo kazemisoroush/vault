@@ -25,18 +25,6 @@ func NewDrop(idx index.Index, blobs blob.Store) *Drop {
 	return &Drop{index: idx, blobs: blobs, now: time.Now, newID: uuid.NewString}
 }
 
-type dropRequest struct {
-	Name        string            `json:"name"`
-	ContentType string            `json:"contentType"`
-	Size        int64             `json:"size"`
-	Meta        map[string]string `json:"meta"`
-}
-
-type dropResponse struct {
-	File      domain.File `json:"file"`
-	UploadURL string      `json:"uploadUrl"`
-}
-
 func (c *Drop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req dropRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

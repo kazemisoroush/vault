@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/kazemisoroush/vault/backend/internal/blob"
-	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 )
 
@@ -17,11 +16,6 @@ type Get struct {
 // NewGet builds a Get controller.
 func NewGet(idx index.Index, blobs blob.Store) *Get {
 	return &Get{index: idx, blobs: blobs}
-}
-
-type getResponse struct {
-	File        domain.File `json:"file"`
-	DownloadURL string      `json:"downloadUrl"`
 }
 
 func (c *Get) ServeHTTP(w http.ResponseWriter, r *http.Request) {

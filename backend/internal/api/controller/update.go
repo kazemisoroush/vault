@@ -19,11 +19,6 @@ func NewUpdate(idx index.Index) *Update {
 	return &Update{index: idx, now: time.Now}
 }
 
-type updateRequest struct {
-	Name *string            `json:"name"`
-	Meta *map[string]string `json:"meta"`
-}
-
 func (c *Update) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	file, ok := lookup(w, r, c.index)
 	if !ok {
