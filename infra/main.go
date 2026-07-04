@@ -64,6 +64,14 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		},
 	})
 
+	// callsTable holds the LLM call trace, one partition keyed by time, expired by TTL.
+	callsTable := awsdynamodb.NewTableV2(stack, jsii.String("Calls"), &awsdynamodb.TablePropsV2{
+		PartitionKey:        &awsdynamodb.Attribute{Name: jsii.String("pk"), Type: awsdynamodb.AttributeType_STRING},
+		SortKey:             &awsdynamodb.Attribute{Name: jsii.String("sk"), Type: awsdynamodb.AttributeType_STRING},
+		TimeToLiveAttribute: jsii.String("ttl"),
+		RemovalPolicy:       awscdk.RemovalPolicy_DESTROY,
+	})
+
 	pool := awscognito.NewUserPool(stack, jsii.String("Users"), &awscognito.UserPoolProps{
 		SelfSignUpEnabled: jsii.Bool(false),
 		SignInAliases:     &awscognito.SignInAliases{Email: jsii.Bool(true)},
@@ -95,12 +103,14 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 			"VAULT_JWT_CLIENT_ID":   client.UserPoolClientId(),
 			"VAULT_BEDROCK_REGION":  stack.Region(),
 			"VAULT_EXTRACTOR_MODEL": jsii.String(extractorModel),
+			"VAULT_CALLS_TABLE":     callsTable.TableName(),
 		},
 	})
 
 	bucket.GrantReadWrite(fn, nil)
 	bucket.GrantDelete(fn, nil)
 	table.GrantReadWriteData(fn)
+	callsTable.GrantReadWriteData(fn)
 
 	fn.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions: jsii.Strings("bedrock:InvokeModel"),

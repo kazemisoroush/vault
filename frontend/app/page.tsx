@@ -7,9 +7,12 @@ import { AskBox } from "../components/AskBox";
 import { DropZone } from "../components/DropZone";
 import { FileList } from "../components/FileList";
 import { Results } from "../components/Results";
+import { Trace } from "../components/Trace";
 import { ask } from "../lib/ask/ask";
 import type { AskResult } from "../lib/ask/askResult";
 import { useAuth } from "../lib/auth/context";
+import { listCalls } from "../lib/calls/listCalls";
+import type { LlmCall } from "../lib/calls/llmCall";
 import { dropFile } from "../lib/files/dropFile";
 import { listFiles } from "../lib/files/listFiles";
 import type { VaultFile } from "../lib/files/vaultFile";
@@ -24,6 +27,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<AskResult[] | null>(null);
   const [asking, setAsking] = useState(false);
+  const [calls, setCalls] = useState<LlmCall[]>([]);
 
   useEffect(() => {
     if (ready && !authenticated) {
@@ -36,16 +40,27 @@ export default function Home() {
     setFiles(await listFiles(api));
   }, [api]);
 
-  useEffect(() => {
-    if (authenticated) void refresh();
-  }, [authenticated, refresh]);
+  const refreshCalls = useCallback(async () => {
+    if (!api) return;
+    setCalls(await listCalls(api));
+  }, [api]);
 
-  // Keep refreshing while a dropped file is still being extracted.
   useEffect(() => {
-    if (!authenticated || !files.some((file) => file.status === "pending")) return;
-    const timer = setInterval(() => void refresh(), pollInterval);
+    if (authenticated) {
+      void refresh();
+      void refreshCalls();
+    }
+  }, [authenticated, refresh, refreshCalls]);
+
+  // Keep refreshing files and the call trace so async extraction shows up as it happens.
+  useEffect(() => {
+    if (!authenticated) return;
+    const timer = setInterval(() => {
+      void refresh();
+      void refreshCalls();
+    }, pollInterval);
     return () => clearInterval(timer);
-  }, [authenticated, files, refresh]);
+  }, [authenticated, refresh, refreshCalls]);
 
   const onFile = useCallback(
     async (file: File) => {
@@ -71,13 +86,14 @@ export default function Home() {
       setError(null);
       try {
         setResults(await ask(api, query));
+        await refreshCalls();
       } catch (err) {
         setError(err instanceof Error ? err.message : "search failed");
       } finally {
         setAsking(false);
       }
     },
-    [api],
+    [api, refreshCalls],
   );
 
   if (!ready) {
@@ -106,6 +122,7 @@ export default function Home() {
         <DropZone onFile={onFile} busy={busy} />
         <FileList files={files} />
       </section>
+      <Trace calls={calls} />
     </main>
   );
 }

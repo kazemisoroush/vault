@@ -114,6 +114,23 @@ paths:
                 $ref: '#/components/schemas/AskResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /calls:
+    get:
+      operationId: listCalls
+      summary: List recent LLM calls, the trace of what the model did.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+      responses:
+        '200':
+          description: Recent LLM calls, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /health:
     get:
       operationId: health
@@ -208,6 +225,27 @@ components:
         results:
           type: array
           items: { $ref: '#/components/schemas/AskResult' }
+    LlmCall:
+      type: object
+      required: [op, model, latencyMs, inputTokens, outputTokens, ok, createdAt]
+      properties:
+        op: { type: string }
+        model: { type: string }
+        prompt: { type: string }
+        reply: { type: string }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        latencyMs: { type: integer, format: int64 }
+        ok: { type: boolean }
+        error: { type: string }
+        createdAt: { type: string, format: date-time }
+    CallsResponse:
+      type: object
+      required: [calls]
+      properties:
+        calls:
+          type: array
+          items: { $ref: '#/components/schemas/LlmCall' }
     Error:
       type: object
       required: [error]

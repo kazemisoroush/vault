@@ -12,6 +12,7 @@ import (
 
 	"github.com/kazemisoroush/vault/backend/internal/api"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
+	"github.com/kazemisoroush/vault/backend/internal/calls"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/retrieve"
@@ -26,15 +27,17 @@ func main() {
 		log.Fatalf("load AWS config: %v", err)
 	}
 
-	idx := index.NewDynamoIndex(dynamodb.NewFromConfig(awsCfg), cfg.Table)
+	dynamoClient := dynamodb.NewFromConfig(awsCfg)
+	idx := index.NewDynamoIndex(dynamoClient, cfg.Table)
 	blobs := blob.NewS3Store(s3.NewFromConfig(awsCfg), cfg.Bucket)
+	recorder := calls.NewDynamoCalls(dynamoClient, cfg.CallsTable)
 
-	retriever, err := retrieve.NewClaudeRetriever(ctx, cfg.BedrockRegion, cfg.ExtractorModel)
+	retriever, err := retrieve.NewClaudeRetriever(ctx, cfg.BedrockRegion, cfg.ExtractorModel, recorder)
 	if err != nil {
 		log.Fatalf("configure retriever: %v", err)
 	}
 
-	apiHandler, err := api.New(ctx, cfg, idx, blobs, retriever)
+	apiHandler, err := api.New(ctx, cfg, idx, blobs, retriever, recorder)
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}

@@ -8,6 +8,7 @@ const defaultServerAddr = ":8080"
 // Config holds every runtime setting the backend reads from the environment.
 type Config struct {
 	Table          string
+	CallsTable     string
 	Bucket         string
 	JWTIssuer      string
 	JWTClientID    string
@@ -21,6 +22,7 @@ type Config struct {
 func Load() Config {
 	return Config{
 		Table:          os.Getenv("VAULT_TABLE"),
+		CallsTable:     os.Getenv("VAULT_CALLS_TABLE"),
 		Bucket:         os.Getenv("VAULT_BUCKET"),
 		JWTIssuer:      os.Getenv("VAULT_JWT_ISSUER"),
 		JWTClientID:    os.Getenv("VAULT_JWT_CLIENT_ID"),

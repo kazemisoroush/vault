@@ -25,8 +25,8 @@ type ClaudeRetriever struct {
 }
 
 // NewClaudeRetriever builds a ClaudeRetriever for a Bedrock region and model.
-func NewClaudeRetriever(_ context.Context, region, model string) (*ClaudeRetriever, error) {
-	return &ClaudeRetriever{model: llm.NewModel(region, model)}, nil
+func NewClaudeRetriever(_ context.Context, region, model string, recorder llm.Recorder) (*ClaudeRetriever, error) {
+	return &ClaudeRetriever{model: llm.NewModel(region, model, "retrieve", recorder)}, nil
 }
 
 // Match asks the model which catalog ids satisfy the query.
@@ -37,7 +37,7 @@ func (r *ClaudeRetriever) Match(ctx context.Context, query string, files []domai
 	}
 	prompt := fmt.Sprintf("Catalog:\n%s\n\nRequest: %s", catalog, query)
 
-	reply, err := r.model.Complete(ctx, maxTokens, anthropic.NewTextBlock(instruction), anthropic.NewTextBlock(prompt))
+	reply, err := r.model.Complete(ctx, instruction+"\n\n"+prompt, maxTokens, anthropic.NewTextBlock(instruction), anthropic.NewTextBlock(prompt))
 	if err != nil {
 		return nil, fmt.Errorf("bedrock retrieve: %w", err)
 	}

@@ -172,3 +172,64 @@ button.link {
   padding-top: 1.5rem;
   border-top: 1px solid #e2e5ea;
 }
+
+.trace {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e5ea;
+}
+
+.trace h2 {
+  font-size: 1rem;
+  margin: 0 0 0.6rem;
+}
+
+.trace table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.trace th {
+  text-align: left;
+  color: #6a7180;
+  font-weight: 500;
+  padding: 0.3rem 0.4rem;
+}
+
+.trace td {
+  padding: 0.3rem 0.4rem;
+  border-top: 1px solid #eef0f3;
+}
+
+.trace .row {
+  cursor: pointer;
+}
+
+.trace .row:hover {
+  background: #f6f7f9;
+}
+
+.trace .ok {
+  color: #1f7a3d;
+}
+
+.trace .fail {
+  color: #b3261e;
+}
+
+.trace .detail td {
+  background: #fbfcfd;
+}
+
+.trace pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0.2rem 0 0.6rem;
+  font-size: 0.8rem;
+  max-height: 220px;
+  overflow: auto;
+  background: #f2f4f6;
+  padding: 0.5rem;
+  border-radius: 6px;
+}
