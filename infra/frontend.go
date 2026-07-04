@@ -25,17 +25,35 @@ func newFrontendHosting(stack awscdk.Stack) frontendHosting {
 		AutoDeleteObjects: jsii.Bool(true),
 	})
 
+	// The static export writes one index.html per route (index.html, login/index.html).
+	// CloudFront only appends the default root object for "/", not for sub-paths, so this
+	// viewer-request function rewrites directory and extensionless URIs to their index.html.
+	// Without it, "/login/" fell back to the root index.html and served the wrong page.
+	rewrite := awscloudfront.NewFunction(stack, jsii.String("WebRewrite"), &awscloudfront.FunctionProps{
+		Runtime: awscloudfront.FunctionRuntime_JS_2_0(),
+		Code: awscloudfront.FunctionCode_FromInline(jsii.String(
+			"function handler(event){var r=event.request;var u=r.uri;" +
+				"if(u.endsWith('/')){r.uri=u+'index.html';}" +
+				"else if(u.lastIndexOf('.')<u.lastIndexOf('/')){r.uri=u+'/index.html';}" +
+				"return r;}",
+		)),
+	})
+
 	distribution := awscloudfront.NewDistribution(stack, jsii.String("WebCdn"), &awscloudfront.DistributionProps{
 		DefaultRootObject: jsii.String("index.html"),
 		DefaultBehavior: &awscloudfront.BehaviorOptions{
 			Origin:               awscloudfrontorigins.S3BucketOrigin_WithOriginAccessControl(bucket, nil),
 			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
+			FunctionAssociations: &[]*awscloudfront.FunctionAssociation{
+				{Function: rewrite, EventType: awscloudfront.FunctionEventType_VIEWER_REQUEST},
+			},
 		},
 		PriceClass: awscloudfront.PriceClass_PRICE_CLASS_100,
-		// SPA routing: client-side routes 404/403 at the edge return index.html so the app can render them.
+		// A missing object returns the static 404 page with a real 404, so a missing asset is
+		// not masked as a 200 of index.html.
 		ErrorResponses: &[]*awscloudfront.ErrorResponse{
-			{HttpStatus: jsii.Number(403), ResponseHttpStatus: jsii.Number(200), ResponsePagePath: jsii.String("/index.html")},
-			{HttpStatus: jsii.Number(404), ResponseHttpStatus: jsii.Number(200), ResponsePagePath: jsii.String("/index.html")},
+			{HttpStatus: jsii.Number(403), ResponseHttpStatus: jsii.Number(404), ResponsePagePath: jsii.String("/404.html")},
+			{HttpStatus: jsii.Number(404), ResponseHttpStatus: jsii.Number(404), ResponsePagePath: jsii.String("/404.html")},
 		},
 	})
 
