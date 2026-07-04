@@ -139,9 +139,17 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Methods:     &[]awsapigatewayv2.HttpMethod{awsapigatewayv2.HttpMethod_GET},
 		Integration: integration,
 	})
+	// Route the real verbs, not ANY: ANY would also match OPTIONS and send the CORS
+	// preflight through the JWT authorizer (401), which fails the browser preflight.
+	// Leaving OPTIONS unrouted lets the HTTP API answer preflight from CorsPreflight.
 	api.AddRoutes(&awsapigatewayv2.AddRoutesOptions{
-		Path:        jsii.String("/{proxy+}"),
-		Methods:     &[]awsapigatewayv2.HttpMethod{awsapigatewayv2.HttpMethod_ANY},
+		Path: jsii.String("/{proxy+}"),
+		Methods: &[]awsapigatewayv2.HttpMethod{
+			awsapigatewayv2.HttpMethod_GET,
+			awsapigatewayv2.HttpMethod_POST,
+			awsapigatewayv2.HttpMethod_PATCH,
+			awsapigatewayv2.HttpMethod_DELETE,
+		},
 		Integration: integration,
 		Authorizer:  authorizer,
 	})
