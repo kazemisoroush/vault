@@ -64,8 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
   }, [auth]);
 
-  // A 401 from the API means the token is gone or expired, so sign out and let the guard
-  // redirect to /login.
   const api = useMemo(
     () => (config ? createApiClient(config, () => token, signOut) : null),
     [config, token, signOut],
