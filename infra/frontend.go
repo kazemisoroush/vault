@@ -42,15 +42,18 @@ func newFrontendHosting(stack awscdk.Stack) frontendHosting {
 	return frontendHosting{bucket: bucket, distribution: distribution}
 }
 
+// webConfig is the runtime config written to config.json. Its keys must match the AppConfig
+// type in frontend/lib/config.ts.
+type webConfig struct {
+	APIURL            *string `json:"apiUrl"`
+	CognitoUserPoolID *string `json:"cognitoUserPoolId"`
+	CognitoClientID   *string `json:"cognitoClientId"`
+}
+
 // deploy uploads the built static site plus a config.json rendered from the stack outputs,
-// then invalidates the distribution so the new version is served immediately. The config keys
-// must match the AppConfig type in frontend/lib/config.ts.
+// then invalidates the distribution so the new version is served immediately.
 func (f frontendHosting) deploy(stack awscdk.Stack, apiURL, userPoolID, clientID *string) {
-	config := map[string]any{
-		"apiUrl":            apiURL,
-		"cognitoUserPoolId": userPoolID,
-		"cognitoClientId":   clientID,
-	}
+	config := webConfig{APIURL: apiURL, CognitoUserPoolID: userPoolID, CognitoClientID: clientID}
 	awss3deployment.NewBucketDeployment(stack, jsii.String("WebDeploy"), &awss3deployment.BucketDeploymentProps{
 		DestinationBucket: f.bucket,
 		Distribution:      f.distribution,
