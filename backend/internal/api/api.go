@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -23,7 +24,7 @@ func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Sto
 
 	authed, err := authenticate(ctx, cfg, router)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("configure authentication: %w", err)
 	}
 	return middleware.NewRecoverMiddleware().Wrap(authed), nil
 }
@@ -40,7 +41,7 @@ func authenticate(ctx context.Context, cfg config.Config, routes http.Handler) (
 
 	keyFunc, err := auth.NewCognitoKeyFunc(ctx, cfg.JWTIssuer)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build auth key resolver: %w", err)
 	}
 	verifier := auth.NewVerifier(cfg.JWTIssuer, cfg.JWTClientID, keyFunc)
 	return middleware.NewAuthMiddleware(verifier).Wrap(routes), nil

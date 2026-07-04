@@ -2,7 +2,3 @@ version: "2"
 linters:
   enable:
     - wrapcheck
-  settings:
-    wrapcheck:
-      ignore-package-globs:
-        - github.com/kazemisoroush/vault/backend/*

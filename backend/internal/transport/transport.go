@@ -30,7 +30,10 @@ func (t *Transport) Handle(ctx context.Context, raw json.RawMessage) (any, error
 		if err := json.Unmarshal(raw, &event); err != nil {
 			return nil, fmt.Errorf("unmarshal S3 event: %w", err)
 		}
-		return nil, t.ingester.Handle(ctx, event)
+		if err := t.ingester.Handle(ctx, event); err != nil {
+			return nil, fmt.Errorf("ingest S3 event: %w", err)
+		}
+		return nil, nil
 	}
 
 	var request events.APIGatewayV2HTTPRequest
