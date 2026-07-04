@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/bedrock"
-	"github.com/aws/aws-sdk-go-v2/config"
+
+	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
 // instruction tells the model to return only a flat JSON metadata object.
@@ -22,37 +22,22 @@ const maxTokens = 1024
 
 // ClaudeExtractor extracts metadata using Claude on Amazon Bedrock.
 type ClaudeExtractor struct {
-	client anthropic.Client
-	model  string
+	model *llm.Model
 }
 
 // NewClaudeExtractor builds a ClaudeExtractor for a Bedrock region and model.
 func NewClaudeExtractor(_ context.Context, region, model string) (*ClaudeExtractor, error) {
-	client := anthropic.NewClient(bedrock.WithLoadDefaultConfig(context.Background(), config.WithRegion(region)))
-	return &ClaudeExtractor{client: client, model: model}, nil
+	return &ClaudeExtractor{model: llm.NewModel(region, model)}, nil
 }
 
 // Extract sends the file to the model and returns its flat metadata map.
 func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentType string) (map[string]string, error) {
-	message := anthropic.NewUserMessage(fileBlock(content, contentType), anthropic.NewTextBlock(instruction))
-
-	resp, err := e.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(e.model),
-		MaxTokens: maxTokens,
-		Messages:  []anthropic.MessageParam{message},
-	})
+	reply, err := e.model.Complete(ctx, maxTokens, fileBlock(content, contentType), anthropic.NewTextBlock(instruction))
 	if err != nil {
 		return nil, fmt.Errorf("bedrock extract: %w", err)
 	}
 
-	var reply strings.Builder
-	for _, block := range resp.Content {
-		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-			reply.WriteString(text.Text)
-		}
-	}
-
-	meta, err := parseMeta(reply.String())
+	meta, err := parseMeta(reply)
 	if err != nil {
 		return nil, fmt.Errorf("parse metadata: %w", err)
 	}
