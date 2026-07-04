@@ -38,7 +38,7 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 	// The frontend hosting is created first so its CloudFront origin can be allowed by
 	// the API and the files bucket CORS below. localhost stays allowed for local dev.
 	hosting := newFrontendHosting(stack)
-	allowedOrigins := jsii.Strings(origin, hosting.url())
+	allowedOrigins := jsii.Strings(origin, hosting.URL())
 
 	bucket := awss3.NewBucket(stack, jsii.String("Files"), &awss3.BucketProps{
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
@@ -148,14 +148,9 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 
 	// Upload the built site and a config.json rendered from the stack outputs, so the SPA
 	// reads its API and Cognito settings at runtime and never drifts from the backend.
-	hosting.deploy(stack, map[string]any{
-		"apiUrl":            api.Url(),
-		"cognitoRegion":     stack.Region(),
-		"cognitoUserPoolId": pool.UserPoolId(),
-		"cognitoClientId":   client.UserPoolClientId(),
-	})
+	hosting.deploy(stack, api.Url(), pool.UserPoolId(), client.UserPoolClientId())
 
-	awscdk.NewCfnOutput(stack, jsii.String("FrontendUrl"), &awscdk.CfnOutputProps{Value: jsii.String(hosting.url())})
+	awscdk.NewCfnOutput(stack, jsii.String("FrontendUrl"), &awscdk.CfnOutputProps{Value: jsii.String(hosting.URL())})
 	awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{Value: api.Url()})
 	awscdk.NewCfnOutput(stack, jsii.String("BucketName"), &awscdk.CfnOutputProps{Value: bucket.BucketName()})
 	awscdk.NewCfnOutput(stack, jsii.String("TableName"), &awscdk.CfnOutputProps{Value: table.TableName()})

@@ -43,8 +43,14 @@ func newFrontendHosting(stack awscdk.Stack) frontendHosting {
 }
 
 // deploy uploads the built static site plus a config.json rendered from the stack outputs,
-// then invalidates the distribution so the new version is served immediately.
-func (f frontendHosting) deploy(stack awscdk.Stack, config map[string]any) {
+// then invalidates the distribution so the new version is served immediately. The config keys
+// must match the AppConfig type in frontend/lib/config.ts.
+func (f frontendHosting) deploy(stack awscdk.Stack, apiURL, userPoolID, clientID *string) {
+	config := map[string]any{
+		"apiUrl":            apiURL,
+		"cognitoUserPoolId": userPoolID,
+		"cognitoClientId":   clientID,
+	}
 	awss3deployment.NewBucketDeployment(stack, jsii.String("WebDeploy"), &awss3deployment.BucketDeploymentProps{
 		DestinationBucket: f.bucket,
 		Distribution:      f.distribution,
@@ -56,7 +62,7 @@ func (f frontendHosting) deploy(stack awscdk.Stack, config map[string]any) {
 	})
 }
 
-// url is the https origin the browser loads and the value added to the API and bucket CORS lists.
-func (f frontendHosting) url() string {
+// URL is the https origin the browser loads and the value added to the API and bucket CORS lists.
+func (f frontendHosting) URL() string {
 	return "https://" + *f.distribution.DistributionDomainName()
 }

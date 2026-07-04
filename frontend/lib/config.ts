@@ -3,17 +3,11 @@
 // so the static build carries no environment-specific values.
 export type AppConfig = {
   apiUrl: string;
-  cognitoRegion: string;
   cognitoUserPoolId: string;
   cognitoClientId: string;
 };
 
-const requiredKeys: (keyof AppConfig)[] = [
-  "apiUrl",
-  "cognitoRegion",
-  "cognitoUserPoolId",
-  "cognitoClientId",
-];
+const requiredKeys: (keyof AppConfig)[] = ["apiUrl", "cognitoUserPoolId", "cognitoClientId"];
 
 // parseConfig validates a raw config.json payload, failing loudly on missing keys.
 export function parseConfig(raw: Partial<AppConfig>): AppConfig {

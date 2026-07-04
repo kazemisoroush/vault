@@ -13,7 +13,6 @@ import { CognitoAuth } from "./cognito";
 
 const config = {
   apiUrl: "https://api.example.com",
-  cognitoRegion: "us-east-1",
   cognitoUserPoolId: "us-east-1_pool",
   cognitoClientId: "client-id",
 };
