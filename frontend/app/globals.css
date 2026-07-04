@@ -37,3 +37,105 @@ button {
 [role="alert"] {
   color: crimson;
 }
+
+.home {
+  width: min(560px, 92vw);
+}
+
+.bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.bar h1 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+button.link {
+  background: none;
+  border: none;
+  color: #3b5670;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.95rem;
+}
+
+.dropzone {
+  margin-top: 1.2rem;
+  border: 1.5px dashed #b7bfca;
+  border-radius: 10px;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #6a7180;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dropzone.over {
+  border-color: #3b5670;
+  background: #eef2f6;
+  color: #2f4056;
+}
+
+.dropzone:focus-visible {
+  outline: 2px solid #3b5670;
+  outline-offset: 2px;
+}
+
+.dropzone p {
+  margin: 0;
+}
+
+.files {
+  list-style: none;
+  padding: 0;
+  margin: 1.2rem 0 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.files li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #e2e5ea;
+  border-radius: 8px;
+}
+
+.files .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.status.pending {
+  background: #fdf2d6;
+  color: #8a6d1a;
+}
+
+.status.ready {
+  background: #dff3e4;
+  color: #1f7a3d;
+}
+
+.status.failed {
+  background: #fbe0e0;
+  color: #b3261e;
+}
+
+.muted {
+  color: #6a7180;
+}
