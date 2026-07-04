@@ -1,4 +1,4 @@
-package router_test
+package transport_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
-	"github.com/kazemisoroush/vault/backend/internal/router"
+	"github.com/kazemisoroush/vault/backend/internal/transport"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 	apiPayload = `{"version":"2.0","routeKey":"GET /files","rawPath":"/files","requestContext":{"http":{"method":"GET","path":"/files"}}}`
 )
 
-func TestDispatchRoutesS3ToIngester(t *testing.T) {
+func TestHandleRoutesS3ToIngester(t *testing.T) {
 	// Arrange
 	ctrl := gomock.NewController(t)
 	ingester := mocks.NewMockIngester(ctrl)
@@ -33,10 +33,10 @@ func TestDispatchRoutesS3ToIngester(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{}, nil
 	}
-	d := router.New(proxy, ingester)
+	adapter := transport.New(proxy, ingester)
 
 	// Act
-	_, err := d.Handle(context.Background(), json.RawMessage(s3Payload))
+	_, err := adapter.Handle(context.Background(), json.RawMessage(s3Payload))
 
 	// Assert
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestDispatchRoutesS3ToIngester(t *testing.T) {
 	assert.False(t, proxyCalled, "S3 event must not hit the HTTP proxy")
 }
 
-func TestDispatchRoutesAPIToProxy(t *testing.T) {
+func TestHandleRoutesAPIToProxy(t *testing.T) {
 	// Arrange
 	ctrl := gomock.NewController(t)
 	ingester := mocks.NewMockIngester(ctrl)
@@ -53,10 +53,10 @@ func TestDispatchRoutesAPIToProxy(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 	}
-	d := router.New(proxy, ingester)
+	adapter := transport.New(proxy, ingester)
 
 	// Act
-	resp, err := d.Handle(context.Background(), json.RawMessage(apiPayload))
+	resp, err := adapter.Handle(context.Background(), json.RawMessage(apiPayload))
 
 	// Assert
 	require.NoError(t, err)

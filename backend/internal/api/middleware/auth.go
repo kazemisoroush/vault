@@ -1,6 +1,7 @@
-package handler
+package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -17,11 +18,11 @@ func RequireAuth(next http.Handler, verifier TokenVerifier) http.Handler {
 
 		token, ok := bearerToken(r)
 		if !ok {
-			writeError(w, http.StatusUnauthorized, "missing bearer token")
+			unauthorized(w, "missing bearer token")
 			return
 		}
 		if err := verifier.Verify(token); err != nil {
-			writeError(w, http.StatusUnauthorized, "invalid token")
+			unauthorized(w, "invalid token")
 			return
 		}
 
@@ -37,4 +38,11 @@ func bearerToken(r *http.Request) (string, bool) {
 	}
 	token := strings.TrimSpace(header[len(bearerPrefix):])
 	return token, token != ""
+}
+
+// unauthorized writes a 401 JSON error.
+func unauthorized(w http.ResponseWriter, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

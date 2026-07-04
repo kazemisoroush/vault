@@ -1,5 +1,5 @@
-// Package router dispatches a raw Lambda event to the right handler.
-package router
+// Package transport adapts the Lambda's two triggers to the right handler.
+package transport
 
 import (
 	"context"
@@ -12,32 +12,32 @@ import (
 // Proxy handles an API Gateway HTTP request.
 type Proxy func(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error)
 
-// Dispatcher routes S3 events to ingestion and everything else to the HTTP proxy.
-type Dispatcher struct {
+// Transport routes an S3 event to ingestion and every other event to the HTTP proxy.
+type Transport struct {
 	proxy    Proxy
 	ingester Ingester
 }
 
-// New builds a Dispatcher over the HTTP proxy and the ingester.
-func New(proxy Proxy, ingester Ingester) *Dispatcher {
-	return &Dispatcher{proxy: proxy, ingester: ingester}
+// New builds a Transport over the HTTP proxy and the ingester.
+func New(proxy Proxy, ingester Ingester) *Transport {
+	return &Transport{proxy: proxy, ingester: ingester}
 }
 
-// Handle routes one raw Lambda event by its type.
-func (d *Dispatcher) Handle(ctx context.Context, raw json.RawMessage) (any, error) {
+// Handle routes one raw Lambda event by its source.
+func (t *Transport) Handle(ctx context.Context, raw json.RawMessage) (any, error) {
 	if isS3Event(raw) {
 		var event events.S3Event
 		if err := json.Unmarshal(raw, &event); err != nil {
 			return nil, fmt.Errorf("unmarshal S3 event: %w", err)
 		}
-		return nil, d.ingester.Handle(ctx, event)
+		return nil, t.ingester.Handle(ctx, event)
 	}
 
 	var request events.APIGatewayV2HTTPRequest
 	if err := json.Unmarshal(raw, &request); err != nil {
 		return nil, fmt.Errorf("unmarshal API request: %w", err)
 	}
-	resp, err := d.proxy(ctx, request)
+	resp, err := t.proxy(ctx, request)
 	if err != nil {
 		return resp, fmt.Errorf("proxy request: %w", err)
 	}

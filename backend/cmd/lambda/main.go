@@ -11,13 +11,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
+	"github.com/kazemisoroush/vault/backend/internal/api"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/extract"
-	"github.com/kazemisoroush/vault/backend/internal/handler"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
-	"github.com/kazemisoroush/vault/backend/internal/router"
+	"github.com/kazemisoroush/vault/backend/internal/transport"
 )
 
 func main() {
@@ -31,13 +31,12 @@ func main() {
 
 	idx := index.NewDynamoIndex(dynamodb.NewFromConfig(awsCfg), cfg.Table)
 	blobs := blob.NewS3Store(s3.NewFromConfig(awsCfg), cfg.Bucket)
-	h := handler.New(idx, blobs)
 
-	routes, err := handler.Guard(ctx, cfg, h.Routes())
+	apiHandler, err := api.New(ctx, cfg, idx, blobs)
 	if err != nil {
-		log.Fatalf("configure auth: %v", err)
+		log.Fatalf("configure api: %v", err)
 	}
-	proxy := httpadapter.NewV2(routes).ProxyWithContext
+	proxy := httpadapter.NewV2(apiHandler).ProxyWithContext
 
 	extractor, err := extract.NewClaudeExtractor(ctx, cfg.BedrockRegion, cfg.ExtractorModel)
 	if err != nil {
@@ -45,6 +44,6 @@ func main() {
 	}
 	ingester := ingest.New(idx, blobs, extractor)
 
-	dispatcher := router.New(proxy, ingester)
-	lambda.Start(dispatcher.Handle)
+	adapter := transport.New(proxy, ingester)
+	lambda.Start(adapter.Handle)
 }

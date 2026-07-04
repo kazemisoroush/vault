@@ -1,4 +1,4 @@
-package handler_test
+package middleware_test
 
 import (
 	"errors"
@@ -9,11 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"github.com/kazemisoroush/vault/backend/internal/handler"
+	"github.com/kazemisoroush/vault/backend/internal/api/middleware"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
-// okNext is a downstream handler that records it was reached.
+// okNext records that the downstream handler was reached.
 func okNext(reached *bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		*reached = true
@@ -35,7 +35,7 @@ func TestRequireAuth(t *testing.T) {
 		{name: "health is public", path: "/health", expectCall: false, wantStatus: http.StatusOK, wantNext: true},
 		{name: "missing header is rejected", path: "/files", expectCall: false, wantStatus: http.StatusUnauthorized, wantNext: false},
 		{name: "valid token passes", path: "/files", authHeader: "Bearer good", verifyErr: nil, expectCall: true, wantStatus: http.StatusOK, wantNext: true},
-		{name: "lowercase bearer scheme passes", path: "/files", authHeader: "bearer good", verifyErr: nil, expectCall: true, wantStatus: http.StatusOK, wantNext: true},
+		{name: "lowercase bearer passes", path: "/files", authHeader: "bearer good", verifyErr: nil, expectCall: true, wantStatus: http.StatusOK, wantNext: true},
 		{name: "invalid token is rejected", path: "/files", authHeader: "Bearer bad", verifyErr: errors.New("nope"), expectCall: true, wantStatus: http.StatusUnauthorized, wantNext: false},
 	}
 
@@ -47,7 +47,7 @@ func TestRequireAuth(t *testing.T) {
 				verifier.EXPECT().Verify(gomock.Any()).Return(tc.verifyErr)
 			}
 			reached := false
-			mw := handler.RequireAuth(okNext(&reached), verifier)
+			mw := middleware.RequireAuth(okNext(&reached), verifier)
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			if tc.authHeader != "" {
 				req.Header.Set("Authorization", tc.authHeader)
@@ -62,4 +62,18 @@ func TestRequireAuth(t *testing.T) {
 			assert.Equal(t, tc.wantNext, reached)
 		})
 	}
+}
+
+func TestRecoverTurnsPanicInto500(t *testing.T) {
+	// Arrange
+	boom := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") })
+	mw := middleware.Recover(boom)
+	rec := httptest.NewRecorder()
+
+	// Act
+	mw.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/files", nil))
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "internal error")
 }
