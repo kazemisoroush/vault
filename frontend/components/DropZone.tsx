@@ -8,12 +8,14 @@ export function DropZone({ onFile, busy }: { onFile: (file: File) => void; busy:
   const [over, setOver] = useState(false);
 
   function open() {
+    if (busy) return;
     inputRef.current?.click();
   }
 
   function handleDrop(event: DragEvent) {
     event.preventDefault();
     setOver(false);
+    if (busy) return;
     const file = event.dataTransfer.files?.[0];
     if (file) onFile(file);
   }

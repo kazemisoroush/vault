@@ -6,12 +6,15 @@ describe("uploadBytes", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("PUTs the file to the url with its content type", async () => {
+    // Arrange
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
     const file = new File(["hi"], "a.txt", { type: "text/plain" });
 
+    // Act
     await uploadBytes("https://s3/put", file, "text/plain");
 
+    // Assert
     expect(fetchMock).toHaveBeenCalledWith("https://s3/put", {
       method: "PUT",
       headers: { "Content-Type": "text/plain" },
@@ -20,9 +23,11 @@ describe("uploadBytes", () => {
   });
 
   it("throws when S3 rejects the upload", async () => {
+    // Arrange
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }));
     const file = new File(["hi"], "a.txt", { type: "text/plain" });
 
+    // Act + Assert
     await expect(uploadBytes("https://s3/put", file, "text/plain")).rejects.toThrow(/403/);
   });
 });

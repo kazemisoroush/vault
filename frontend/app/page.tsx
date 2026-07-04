@@ -7,6 +7,7 @@ import { DropZone } from "../components/DropZone";
 import { FileList } from "../components/FileList";
 import { useAuth } from "../lib/auth/context";
 import { dropFile } from "../lib/files/dropFile";
+import { listFiles } from "../lib/files/listFiles";
 import type { VaultFile } from "../lib/files/vaultFile";
 
 const pollInterval = 3000;
@@ -26,8 +27,7 @@ export default function Home() {
 
   const refresh = useCallback(async () => {
     if (!api) return;
-    const { data } = await api.GET("/files", {});
-    setFiles(data?.files ?? []);
+    setFiles(await listFiles(api));
   }, [api]);
 
   useEffect(() => {
