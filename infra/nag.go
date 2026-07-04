@@ -38,6 +38,26 @@ func suppressNag(stack awscdk.Stack, healthRoute constructs.IConstruct) {
 			Id:     jsii.String("AwsSolutions-APIG1"),
 			Reason: jsii.String("HTTP API access logging is deferred to M4."),
 		},
+		{
+			Id:     jsii.String("AwsSolutions-CFR1"),
+			Reason: jsii.String("CloudFront geo restriction is not needed for a single-user personal vault."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-CFR2"),
+			Reason: jsii.String("CloudFront WAF is deferred to M4; single-user vault behind Cognito auth."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-CFR3"),
+			Reason: jsii.String("CloudFront access logging is deferred to M4; single-user vault."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-CFR4"),
+			Reason: jsii.String("The default CloudFront domain and certificate are used; a custom domain with a TLS minimum version lands with M4."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-L1"),
+			Reason: jsii.String("The S3 BucketDeployment and auto-delete custom resources use CDK-managed Lambdas whose runtime is pinned by the CDK version."),
+		},
 	}, jsii.Bool(true))
 
 	cdknag.NagSuppressions_AddResourceSuppressions(healthRoute, &[]*cdknag.NagPackSuppression{

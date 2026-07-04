@@ -35,13 +35,18 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		origin = "http://localhost:3000"
 	}
 
+	// The frontend hosting is created first so its CloudFront origin can be allowed by
+	// the API and the files bucket CORS below. localhost stays allowed for local dev.
+	hosting := newFrontendHosting(stack)
+	allowedOrigins := jsii.Strings(origin, hosting.url())
+
 	bucket := awss3.NewBucket(stack, jsii.String("Files"), &awss3.BucketProps{
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 		Encryption:        awss3.BucketEncryption_S3_MANAGED,
 		EnforceSSL:        jsii.Bool(true),
 		Cors: &[]*awss3.CorsRule{{
 			AllowedMethods: &[]awss3.HttpMethods{awss3.HttpMethods_PUT, awss3.HttpMethods_GET},
-			AllowedOrigins: jsii.Strings(origin),
+			AllowedOrigins: allowedOrigins,
 			AllowedHeaders: jsii.Strings("*"),
 		}},
 		LifecycleRules: &[]*awss3.LifecycleRule{{
@@ -113,7 +118,7 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 
 	api := awsapigatewayv2.NewHttpApi(stack, jsii.String("HttpApi"), &awsapigatewayv2.HttpApiProps{
 		CorsPreflight: &awsapigatewayv2.CorsPreflightOptions{
-			AllowOrigins: jsii.Strings(origin),
+			AllowOrigins: allowedOrigins,
 			AllowMethods: &[]awsapigatewayv2.CorsHttpMethod{
 				awsapigatewayv2.CorsHttpMethod_GET,
 				awsapigatewayv2.CorsHttpMethod_POST,
@@ -141,6 +146,16 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Authorizer:  authorizer,
 	})
 
+	// Upload the built site and a config.json rendered from the stack outputs, so the SPA
+	// reads its API and Cognito settings at runtime and never drifts from the backend.
+	hosting.deploy(stack, map[string]any{
+		"apiUrl":            api.Url(),
+		"cognitoRegion":     stack.Region(),
+		"cognitoUserPoolId": pool.UserPoolId(),
+		"cognitoClientId":   client.UserPoolClientId(),
+	})
+
+	awscdk.NewCfnOutput(stack, jsii.String("FrontendUrl"), &awscdk.CfnOutputProps{Value: jsii.String(hosting.url())})
 	awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{Value: api.Url()})
 	awscdk.NewCfnOutput(stack, jsii.String("BucketName"), &awscdk.CfnOutputProps{Value: bucket.BucketName()})
 	awscdk.NewCfnOutput(stack, jsii.String("TableName"), &awscdk.CfnOutputProps{Value: table.TableName()})
