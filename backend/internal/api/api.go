@@ -17,11 +17,7 @@ import (
 // New builds the API handler: controllers behind the router, wrapped in middleware.
 func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store) (http.Handler, error) {
 	router := NewRouter(
-		controller.NewDrop(idx, blobs),
-		controller.NewList(idx),
-		controller.NewGet(idx, blobs),
-		controller.NewUpdate(idx),
-		controller.NewDelete(idx, blobs),
+		controller.NewFile(idx, blobs),
 		controller.NewHealth(),
 	)
 

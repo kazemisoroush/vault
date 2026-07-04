@@ -26,7 +26,7 @@ func mockDeps(t *testing.T) (*mocks.MockIndex, *mocks.MockStore) {
 func TestDropCreatesPendingRecord(t *testing.T) {
 	// Arrange
 	idx, blobs := mockDeps(t)
-	c := NewDrop(idx, blobs)
+	c := NewFile(idx, blobs)
 	c.now = func() time.Time { return time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC) }
 	c.newID = func() string { return "test-id" }
 	blobs.EXPECT().PresignPut(gomock.Any(), "files/test-id", "image/jpeg", presignExpiry).Return("https://upload", nil)
@@ -39,7 +39,7 @@ func TestDropCreatesPendingRecord(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.ServeHTTP(rec, req)
+	c.Drop(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusCreated, rec.Code)
@@ -52,12 +52,12 @@ func TestDropCreatesPendingRecord(t *testing.T) {
 func TestDropRejectsMissingFields(t *testing.T) {
 	// Arrange
 	idx, blobs := mockDeps(t)
-	c := NewDrop(idx, blobs)
+	c := NewFile(idx, blobs)
 	req := httptest.NewRequest(http.MethodPost, "/files", strings.NewReader(`{"name":"x"}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.ServeHTTP(rec, req)
+	c.Drop(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusBadRequest, rec.Code)
@@ -67,13 +67,13 @@ func TestGetNotFound(t *testing.T) {
 	// Arrange
 	idx, blobs := mockDeps(t)
 	idx.EXPECT().Get(gomock.Any(), "missing").Return(domain.File{}, index.ErrNotFound)
-	c := NewGet(idx, blobs)
+	c := NewFile(idx, blobs)
 	req := httptest.NewRequest(http.MethodGet, "/files/missing", nil)
 	req.SetPathValue("id", "missing")
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.ServeHTTP(rec, req)
+	c.Get(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusNotFound, rec.Code)
@@ -81,13 +81,13 @@ func TestGetNotFound(t *testing.T) {
 
 func TestListRejectsBadLimit(t *testing.T) {
 	// Arrange
-	idx, _ := mockDeps(t)
-	c := NewList(idx)
+	idx, blobs := mockDeps(t)
+	c := NewFile(idx, blobs)
 	req := httptest.NewRequest(http.MethodGet, "/files?limit=-5", nil)
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.ServeHTTP(rec, req)
+	c.List(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusBadRequest, rec.Code)
@@ -100,13 +100,13 @@ func TestDeleteRemovesRecordThenBlob(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "test-id").Return(file, nil)
 	idx.EXPECT().Delete(gomock.Any(), "test-id").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), "files/test-id").Return(nil)
-	c := NewDelete(idx, blobs)
+	c := NewFile(idx, blobs)
 	req := httptest.NewRequest(http.MethodDelete, "/files/test-id", nil)
 	req.SetPathValue("id", "test-id")
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.ServeHTTP(rec, req)
+	c.Delete(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusNoContent, rec.Code)

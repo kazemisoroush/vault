@@ -12,14 +12,14 @@ type Router struct {
 	mux *http.ServeMux
 }
 
-// NewRouter wires each endpoint to its controller. Distinct types make a mis-order a compile error.
-func NewRouter(drop *controller.Drop, list *controller.List, get *controller.Get, update *controller.Update, remove *controller.Delete, health *controller.Health) *Router {
+// NewRouter wires each endpoint to a controller method.
+func NewRouter(files *controller.File, health *controller.Health) *Router {
 	mux := http.NewServeMux()
-	mux.Handle("POST /files", drop)
-	mux.Handle("GET /files", list)
-	mux.Handle("GET /files/{id}", get)
-	mux.Handle("PATCH /files/{id}", update)
-	mux.Handle("DELETE /files/{id}", remove)
+	mux.HandleFunc("POST /files", files.Drop)
+	mux.HandleFunc("GET /files", files.List)
+	mux.HandleFunc("GET /files/{id}", files.Get)
+	mux.HandleFunc("PATCH /files/{id}", files.Update)
+	mux.HandleFunc("DELETE /files/{id}", files.Delete)
 	mux.Handle("GET /health", health)
 	return &Router{mux: mux}
 }
