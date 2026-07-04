@@ -24,7 +24,44 @@ jobs:
         with:
           working-directory: backend
 
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: API client is in sync with openapi.yaml
+        working-directory: frontend
+        run: |
+          npm run generate:api
+          git diff --exit-code lib/api/schema.ts
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Test
+        working-directory: frontend
+        run: npm run test
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+      - name: Upload static site
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: web
+          path: frontend/out
+          retention-days: 1
+
   infra:
+    needs: [frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -37,6 +74,11 @@ jobs:
       - name: Test
         working-directory: infra
         run: go test ./...
+      - name: Download static site
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: web
+          path: frontend/out
       - name: Install CDK
         run: npm install -g aws-cdk@2
       - name: Synth (cdk-nag security gate)
@@ -47,7 +89,7 @@ jobs:
           CDK_DEFAULT_REGION: us-east-1
 
   deploy:
-    needs: [backend, infra]
+    needs: [backend, frontend, infra]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -58,6 +100,11 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: infra/go.mod
+      - name: Download static site
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: web
+          path: frontend/out
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
