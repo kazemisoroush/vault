@@ -46,11 +46,7 @@ func (d *Dispatcher) Handle(ctx context.Context, raw json.RawMessage) (any, erro
 
 // isS3Event reports whether the raw event is an S3 event.
 func isS3Event(raw json.RawMessage) bool {
-	var probe struct {
-		Records []struct {
-			EventSource string `json:"eventSource"`
-		} `json:"Records"`
-	}
+	var probe s3EventProbe
 	if err := json.Unmarshal(raw, &probe); err != nil {
 		return false
 	}
