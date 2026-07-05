@@ -44,8 +44,7 @@ func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentTy
 		return nil, fmt.Errorf("parse metadata: %w", err)
 	}
 
-	// Start from the file's own embedded metadata (EXIF, office core properties); the model's read
-	// of the content wins on any conflicting key.
+	// The model's extraction wins over the file's own embedded metadata on any conflicting key.
 	result := embeddedMeta(content, contentType)
 	maps.Copy(result, meta)
 	return result, nil
@@ -60,7 +59,10 @@ func fileBlock(content []byte, contentType string) anthropic.ContentBlockParamUn
 	case contentType == "application/pdf":
 		return anthropic.NewDocumentBlock(anthropic.Base64PDFSourceParam{Data: base64.StdEncoding.EncodeToString(content)})
 	case isOffice(contentType):
-		text, _ := officeText(content)
+		text, err := officeText(content)
+		if err != nil || strings.TrimSpace(text) == "" {
+			text = "(no readable text in this document)"
+		}
 		return anthropic.NewTextBlock(text)
 	default:
 		return anthropic.NewTextBlock(string(content))

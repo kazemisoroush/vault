@@ -30,12 +30,15 @@ func TestIsOffice(t *testing.T) {
 	assert.False(t, isOffice("image/jpeg"))
 }
 
+// officeTextCase is one OOXML content-part fixture and the text it should yield.
+type officeTextCase struct {
+	name  string
+	parts map[string]string
+	want  string
+}
+
 func TestOfficeTextReadsContentParts(t *testing.T) {
-	tests := []struct {
-		name  string
-		parts map[string]string
-		want  string
-	}{
+	tests := []officeTextCase{
 		{
 			name:  "docx",
 			parts: map[string]string{"word/document.xml": `<w:body><w:p><w:r><w:t>Hello</w:t></w:r><w:r><w:t>world</w:t></w:r></w:p></w:body>`},
@@ -83,4 +86,28 @@ func TestOfficeTextRejectsNonZip(t *testing.T) {
 
 	// Assert
 	assert.Error(t, err)
+}
+
+func TestFileBlockOfficeDecodesToText(t *testing.T) {
+	// Arrange
+	content := zipBytes(t, map[string]string{"word/document.xml": `<w:t>Invoice total 52.30</w:t>`})
+
+	// Act
+	block := fileBlock(content, docxType)
+
+	// Assert
+	require.NotNil(t, block.OfText)
+	assert.Contains(t, block.OfText.Text, "Invoice total")
+}
+
+func TestFileBlockOfficeFallsBackWhenEmpty(t *testing.T) {
+	// Arrange: an office file with no readable content part.
+	content := zipBytes(t, map[string]string{"docProps/app.xml": `<Properties/>`})
+
+	// Act
+	block := fileBlock(content, docxType)
+
+	// Assert: a non-empty placeholder so the model still returns valid JSON.
+	require.NotNil(t, block.OfText)
+	assert.Equal(t, "(no readable text in this document)", block.OfText.Text)
 }

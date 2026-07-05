@@ -19,8 +19,7 @@ type coreProperties struct {
 	Modified string `xml:"modified"`
 }
 
-// embeddedMeta returns best-effort metadata read from the file's own bytes: EXIF for images, core
-// properties for office documents. It never fails; missing or unreadable metadata yields no keys.
+// embeddedMeta returns best-effort metadata from the file's own bytes (EXIF for images, office core properties).
 func embeddedMeta(content []byte, contentType string) map[string]string {
 	switch {
 	case strings.HasPrefix(contentType, "image/"):
@@ -32,9 +31,14 @@ func embeddedMeta(content []byte, contentType string) map[string]string {
 	}
 }
 
-// imageEXIF pulls capture time, GPS, and camera from an image's EXIF, when present.
-func imageEXIF(content []byte) map[string]string {
-	meta := map[string]string{}
+// imageEXIF pulls capture time, GPS, and camera from an image's EXIF, recovering if the parser panics.
+func imageEXIF(content []byte) (meta map[string]string) {
+	meta = map[string]string{}
+	defer func() {
+		if recover() != nil {
+			meta = map[string]string{}
+		}
+	}()
 	decoded, err := exif.Decode(bytes.NewReader(content))
 	if err != nil {
 		return meta
@@ -63,7 +67,7 @@ func exifString(decoded *exif.Exif, name exif.FieldName) string {
 	return strings.TrimSpace(value)
 }
 
-// officeCoreProps pulls the author, title, and dates from an office document's core properties.
+// officeCoreProps pulls the author, title, subject, and dates from an office document's core properties.
 func officeCoreProps(content []byte) map[string]string {
 	meta := map[string]string{}
 	reader, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))

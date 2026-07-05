@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+// maxPartBytes and maxTotalBytes bound how much a zip decompresses to, so a crafted file cannot
+// exhaust memory.
+const (
+	maxPartBytes  = 16 << 20
+	maxTotalBytes = 32 << 20
+)
+
 // officeContentTypes are the OOXML (zipped) formats whose bytes must be decoded before the model
 // can read them.
 var officeContentTypes = map[string]bool{
@@ -31,7 +38,7 @@ func officeText(content []byte) (string, error) {
 
 	var out strings.Builder
 	for _, file := range reader.File {
-		if !isContentPart(file.Name) {
+		if !isContentPart(file.Name) || out.Len() >= maxTotalBytes {
 			continue
 		}
 		if text, err := xmlText(file); err == nil {
@@ -61,7 +68,7 @@ func xmlText(file *zip.File) (string, error) {
 	}
 	defer func() { _ = rc.Close() }()
 
-	decoder := xml.NewDecoder(rc)
+	decoder := xml.NewDecoder(io.LimitReader(rc, maxPartBytes))
 	var out strings.Builder
 	for {
 		token, err := decoder.Token()
