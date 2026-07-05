@@ -7,29 +7,37 @@ const defaultServerAddr = ":8080"
 
 // Config holds every runtime setting the backend reads from the environment.
 type Config struct {
-	Table          string
-	CallsTable     string
-	Bucket         string
-	JWTIssuer      string
-	JWTClientID    string
-	Addr           string
-	AuthDisabled   bool
-	BedrockRegion  string
-	ExtractorModel string
+	Table         string
+	CallsTable    string
+	Bucket        string
+	JWTIssuer     string
+	JWTClientID   string
+	Addr          string
+	AuthDisabled  bool
+	BedrockRegion string
+	ExtractModel  string
+	RerankModel   string
+	EmbedModel    string
+	VectorBucket  string
+	VectorIndex   string
 }
 
 // Load reads the configuration from environment variables.
 func Load() Config {
 	return Config{
-		Table:          os.Getenv("VAULT_TABLE"),
-		CallsTable:     os.Getenv("VAULT_CALLS_TABLE"),
-		Bucket:         os.Getenv("VAULT_BUCKET"),
-		JWTIssuer:      os.Getenv("VAULT_JWT_ISSUER"),
-		JWTClientID:    os.Getenv("VAULT_JWT_CLIENT_ID"),
-		Addr:           os.Getenv("VAULT_ADDR"),
-		AuthDisabled:   os.Getenv("VAULT_AUTH_DISABLED") == "true",
-		BedrockRegion:  os.Getenv("VAULT_BEDROCK_REGION"),
-		ExtractorModel: os.Getenv("VAULT_EXTRACTOR_MODEL"),
+		Table:         os.Getenv("VAULT_TABLE"),
+		CallsTable:    os.Getenv("VAULT_CALLS_TABLE"),
+		Bucket:        os.Getenv("VAULT_BUCKET"),
+		JWTIssuer:     os.Getenv("VAULT_JWT_ISSUER"),
+		JWTClientID:   os.Getenv("VAULT_JWT_CLIENT_ID"),
+		Addr:          os.Getenv("VAULT_ADDR"),
+		AuthDisabled:  os.Getenv("VAULT_AUTH_DISABLED") == "true",
+		BedrockRegion: os.Getenv("VAULT_BEDROCK_REGION"),
+		ExtractModel:  os.Getenv("VAULT_EXTRACT_MODEL"),
+		RerankModel:   os.Getenv("VAULT_RERANK_MODEL"),
+		EmbedModel:    os.Getenv("VAULT_EMBED_MODEL"),
+		VectorBucket:  os.Getenv("VAULT_VECTOR_BUCKET"),
+		VectorIndex:   os.Getenv("VAULT_VECTOR_INDEX"),
 	}
 }
 

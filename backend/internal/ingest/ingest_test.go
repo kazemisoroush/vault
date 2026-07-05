@@ -41,7 +41,12 @@ func TestHandleExtractionSucceeds(t *testing.T) {
 		return nil
 	})
 
-	h := ingest.New(idx, blobs, extractor)
+	embedder := mocks.NewMockEmbedder(ctrl)
+	store := mocks.NewMockVectorStore(ctrl)
+	embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return([]float32{0.1, 0.2}, nil)
+	store.EXPECT().Put(gomock.Any(), "abc", []float32{0.1, 0.2}).Return(nil)
+
+	h := ingest.New(idx, blobs, extractor, embedder, store)
 
 	// Act
 	err := h.Handle(context.Background(), s3Event("files/abc"))
@@ -72,7 +77,7 @@ func TestHandleExtractionFailsMarksFailed(t *testing.T) {
 		return nil
 	})
 
-	h := ingest.New(idx, blobs, extractor)
+	h := ingest.New(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event("files/abc"))
@@ -93,7 +98,7 @@ func TestHandleReadErrorIsReturned(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "abc").Return(stored, nil)
 	blobs.EXPECT().Get(gomock.Any(), "files/abc").Return(nil, "", errors.New("s3 down"))
 
-	h := ingest.New(idx, blobs, extractor)
+	h := ingest.New(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event("files/abc"))

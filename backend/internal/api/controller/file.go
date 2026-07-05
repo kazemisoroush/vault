@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,19 +12,21 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/index"
+	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 // FileController serves the five CRUD verbs over file records and their blobs.
 type FileController struct {
-	index index.Index
-	blobs blob.Store
-	now   func() time.Time
-	newID func() string
+	index   index.Index
+	blobs   blob.Store
+	vectors vectors.Store
+	now     func() time.Time
+	newID   func() string
 }
 
 // NewFileController builds a file controller with a real clock and id generator.
-func NewFileController(idx index.Index, blobs blob.Store) *FileController {
-	return &FileController{index: idx, blobs: blobs, now: time.Now, newID: uuid.NewString}
+func NewFileController(idx index.Index, blobs blob.Store, store vectors.Store) *FileController {
+	return &FileController{index: idx, blobs: blobs, vectors: store, now: time.Now, newID: uuid.NewString}
 }
 
 // dropRequest is the body of a POST /files call.
@@ -186,6 +189,11 @@ func (c *FileController) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := c.blobs.Delete(r.Context(), file.Key); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not delete file bytes")
 		return
+	}
+
+	// The record and bytes are gone; a leftover vector is harmless, so a failure here is logged, not fatal.
+	if err := c.vectors.Delete(r.Context(), file.ID); err != nil {
+		log.Printf("delete vector for %s: %v", file.ID, err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

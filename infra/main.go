@@ -19,8 +19,21 @@ import (
 	"github.com/cdklabs/cdk-nag-go/cdknag/v2"
 )
 
-// extractorModel is the Bedrock Claude inference profile that fills metadata on drop.
-const extractorModel = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+// extractModel is the Bedrock Claude inference profile that fills metadata on drop.
+const extractModel = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+// rerankModel re-ranks the vector shortlist on ask; the same small Claude model as extract.
+const rerankModel = extractModel
+
+// embedModel turns text into a vector for search, on both drop and ask.
+const embedModel = "amazon.titan-embed-text-v2:0"
+
+// vectorBucketName and vectorIndexName name the S3 Vectors store, and embedDimension is Titan v2's width.
+const (
+	vectorBucketName = "vault-vectors"
+	vectorIndexName  = "files"
+	embedDimension   = 1024
+)
 
 // filesKeyPrefix is the S3 key namespace for blobs, matching blob.keyPrefix in the backend.
 const filesKeyPrefix = "files/"
@@ -72,6 +85,26 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		RemovalPolicy:       awscdk.RemovalPolicy_DESTROY,
 	})
 
+	// The S3 Vectors bucket and index hold one embedding per file, keyed by file id, for semantic
+	// search. CloudFormation supports these natively, so they are plain L1 resources.
+	vectorBucket := awscdk.NewCfnResource(stack, jsii.String("VectorBucket"), &awscdk.CfnResourceProps{
+		Type: jsii.String("AWS::S3Vectors::VectorBucket"),
+		Properties: &map[string]interface{}{
+			"VectorBucketName": jsii.String(vectorBucketName),
+		},
+	})
+	vectorIndex := awscdk.NewCfnResource(stack, jsii.String("VectorIndex"), &awscdk.CfnResourceProps{
+		Type: jsii.String("AWS::S3Vectors::Index"),
+		Properties: &map[string]interface{}{
+			"VectorBucketName": jsii.String(vectorBucketName),
+			"IndexName":        jsii.String(vectorIndexName),
+			"DataType":         jsii.String("float32"),
+			"Dimension":        jsii.Number(embedDimension),
+			"DistanceMetric":   jsii.String("cosine"),
+		},
+	})
+	vectorIndex.AddDependency(vectorBucket)
+
 	pool := awscognito.NewUserPool(stack, jsii.String("Users"), &awscognito.UserPoolProps{
 		SelfSignUpEnabled: jsii.Bool(false),
 		SignInAliases:     &awscognito.SignInAliases{Email: jsii.Bool(true)},
@@ -97,13 +130,17 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Entry:   jsii.String("../backend/cmd/lambda"),
 		Timeout: awscdk.Duration_Seconds(jsii.Number(30)),
 		Environment: &map[string]*string{
-			"VAULT_TABLE":           table.TableName(),
-			"VAULT_BUCKET":          bucket.BucketName(),
-			"VAULT_JWT_ISSUER":      pool.UserPoolProviderUrl(),
-			"VAULT_JWT_CLIENT_ID":   client.UserPoolClientId(),
-			"VAULT_BEDROCK_REGION":  stack.Region(),
-			"VAULT_EXTRACTOR_MODEL": jsii.String(extractorModel),
-			"VAULT_CALLS_TABLE":     callsTable.TableName(),
+			"VAULT_TABLE":          table.TableName(),
+			"VAULT_BUCKET":         bucket.BucketName(),
+			"VAULT_JWT_ISSUER":     pool.UserPoolProviderUrl(),
+			"VAULT_JWT_CLIENT_ID":  client.UserPoolClientId(),
+			"VAULT_BEDROCK_REGION": stack.Region(),
+			"VAULT_EXTRACT_MODEL":  jsii.String(extractModel),
+			"VAULT_RERANK_MODEL":   jsii.String(rerankModel),
+			"VAULT_EMBED_MODEL":    jsii.String(embedModel),
+			"VAULT_VECTOR_BUCKET":  jsii.String(vectorBucketName),
+			"VAULT_VECTOR_INDEX":   jsii.String(vectorIndexName),
+			"VAULT_CALLS_TABLE":    callsTable.TableName(),
 		},
 	})
 
@@ -116,8 +153,20 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Actions: jsii.Strings("bedrock:InvokeModel"),
 		Resources: jsii.Strings(
 			"arn:aws:bedrock:*::foundation-model/anthropic.*",
+			"arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
 			"arn:aws:bedrock:*:"+*stack.Account()+":inference-profile/*",
 		),
+	}))
+
+	// The index and its parent bucket back semantic search: read on ask, write on drop, delete on remove.
+	vectorArn := "arn:aws:s3vectors:" + *stack.Region() + ":" + *stack.Account() + ":bucket/" + vectorBucketName
+	fn.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions: jsii.Strings(
+			"s3vectors:PutVectors",
+			"s3vectors:QueryVectors",
+			"s3vectors:DeleteVectors",
+		),
+		Resources: jsii.Strings(vectorArn, vectorArn+"/index/"+vectorIndexName),
 	}))
 
 	bucket.AddEventNotification(

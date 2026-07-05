@@ -15,11 +15,13 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/calls"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
+	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
 	"github.com/kazemisoroush/vault/backend/internal/retrieve"
 	"github.com/kazemisoroush/vault/backend/internal/transport"
+	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 func main() {
@@ -36,22 +38,31 @@ func main() {
 	blobs := blob.NewS3Store(s3.NewFromConfig(awsCfg), cfg.Bucket)
 	recorder := calls.NewDynamoCalls(dynamoClient, cfg.CallsTable)
 
-	retriever, err := retrieve.NewClaudeRetriever(ctx, cfg.BedrockRegion, cfg.ExtractorModel, recorder)
+	embedder, err := embed.NewTitanEmbedder(ctx, cfg.BedrockRegion, cfg.EmbedModel, recorder)
+	if err != nil {
+		log.Fatalf("configure embedder: %v", err)
+	}
+	vectorStore, err := vectors.NewS3Vectors(ctx, cfg.BedrockRegion, cfg.VectorBucket, cfg.VectorIndex)
+	if err != nil {
+		log.Fatalf("configure vector store: %v", err)
+	}
+
+	retriever, err := retrieve.NewClaudeRetriever(ctx, cfg.BedrockRegion, cfg.RerankModel, recorder)
 	if err != nil {
 		log.Fatalf("configure retriever: %v", err)
 	}
 
-	apiHandler, err := api.New(ctx, cfg, idx, blobs, retriever, recorder)
+	apiHandler, err := api.New(ctx, cfg, idx, blobs, embedder, vectorStore, retriever, recorder)
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}
 	proxy := httpadapter.NewV2(apiHandler).ProxyWithContext
 
-	extractor, err := extract.NewClaudeExtractor(ctx, cfg.BedrockRegion, cfg.ExtractorModel, recorder)
+	extractor, err := extract.NewClaudeExtractor(ctx, cfg.BedrockRegion, cfg.ExtractModel, recorder)
 	if err != nil {
 		log.Fatalf("configure extractor: %v", err)
 	}
-	ingester := ingest.New(idx, blobs, extractor)
+	ingester := ingest.New(idx, blobs, extractor, embedder, vectorStore)
 
 	adapter := transport.New(proxy, ingester)
 	lambda.Start(adapter.Handle)

@@ -1,7 +1,11 @@
 // Package domain holds the core Vault records.
 package domain
 
-import "time"
+import (
+	"sort"
+	"strings"
+	"time"
+)
 
 // Status values describe where a file is in the extraction lifecycle.
 const (
@@ -21,4 +25,19 @@ type File struct {
 	Meta        map[string]string `json:"meta,omitempty" dynamodbav:"meta,omitempty"`
 	CreatedAt   time.Time         `json:"createdAt" dynamodbav:"createdAt"`
 	UpdatedAt   time.Time         `json:"updatedAt" dynamodbav:"updatedAt"`
+}
+
+// SearchText is the name and metadata joined into the text that gets embedded for search.
+// Keys are sorted so the same file always produces the same text.
+func (f File) SearchText() string {
+	parts := []string{f.Name}
+	keys := make([]string, 0, len(f.Meta))
+	for key := range f.Meta {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		parts = append(parts, key+": "+f.Meta[key])
+	}
+	return strings.Join(parts, "\n")
 }

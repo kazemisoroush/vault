@@ -17,16 +17,16 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
-func mockDeps(t *testing.T) (*mocks.MockIndex, *mocks.MockStore) {
+func mockDeps(t *testing.T) (*mocks.MockIndex, *mocks.MockStore, *mocks.MockVectorStore) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-	return mocks.NewMockIndex(ctrl), mocks.NewMockStore(ctrl)
+	return mocks.NewMockIndex(ctrl), mocks.NewMockStore(ctrl), mocks.NewMockVectorStore(ctrl)
 }
 
 func TestDropCreatesPendingRecord(t *testing.T) {
 	// Arrange
-	idx, blobs := mockDeps(t)
-	c := NewFileController(idx, blobs)
+	idx, blobs, store := mockDeps(t)
+	c := NewFileController(idx, blobs, store)
 	c.now = func() time.Time { return time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC) }
 	c.newID = func() string { return "test-id" }
 	blobs.EXPECT().PresignPut(gomock.Any(), "files/test-id", "image/jpeg", presignExpiry).Return("https://upload", nil)
@@ -51,8 +51,8 @@ func TestDropCreatesPendingRecord(t *testing.T) {
 
 func TestDropRejectsMissingFields(t *testing.T) {
 	// Arrange
-	idx, blobs := mockDeps(t)
-	c := NewFileController(idx, blobs)
+	idx, blobs, store := mockDeps(t)
+	c := NewFileController(idx, blobs, store)
 	req := httptest.NewRequest(http.MethodPost, "/files", strings.NewReader(`{"name":"x"}`))
 	rec := httptest.NewRecorder()
 
@@ -65,9 +65,9 @@ func TestDropRejectsMissingFields(t *testing.T) {
 
 func TestGetNotFound(t *testing.T) {
 	// Arrange
-	idx, blobs := mockDeps(t)
+	idx, blobs, store := mockDeps(t)
 	idx.EXPECT().Get(gomock.Any(), "missing").Return(domain.File{}, index.ErrNotFound)
-	c := NewFileController(idx, blobs)
+	c := NewFileController(idx, blobs, store)
 	req := httptest.NewRequest(http.MethodGet, "/files/missing", nil)
 	req.SetPathValue("id", "missing")
 	rec := httptest.NewRecorder()
@@ -81,8 +81,8 @@ func TestGetNotFound(t *testing.T) {
 
 func TestListRejectsBadLimit(t *testing.T) {
 	// Arrange
-	idx, blobs := mockDeps(t)
-	c := NewFileController(idx, blobs)
+	idx, blobs, store := mockDeps(t)
+	c := NewFileController(idx, blobs, store)
 	req := httptest.NewRequest(http.MethodGet, "/files?limit=-5", nil)
 	rec := httptest.NewRecorder()
 
@@ -95,12 +95,13 @@ func TestListRejectsBadLimit(t *testing.T) {
 
 func TestDeleteRemovesRecordThenBlob(t *testing.T) {
 	// Arrange
-	idx, blobs := mockDeps(t)
+	idx, blobs, store := mockDeps(t)
 	file := domain.File{ID: "test-id", Key: "files/test-id"}
 	idx.EXPECT().Get(gomock.Any(), "test-id").Return(file, nil)
 	idx.EXPECT().Delete(gomock.Any(), "test-id").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), "files/test-id").Return(nil)
-	c := NewFileController(idx, blobs)
+	store.EXPECT().Delete(gomock.Any(), "test-id").Return(nil)
+	c := NewFileController(idx, blobs, store)
 	req := httptest.NewRequest(http.MethodDelete, "/files/test-id", nil)
 	req.SetPathValue("id", "test-id")
 	rec := httptest.NewRecorder()
