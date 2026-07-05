@@ -7,7 +7,9 @@ import { AskBox } from "../components/AskBox";
 import { DropZone } from "../components/DropZone";
 import { FileList } from "../components/FileList";
 import { Results } from "../components/Results";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { Trace } from "../components/Trace";
+import { Wordmark } from "../components/Wordmark";
 import { ask } from "../lib/ask/ask";
 import type { AskResult } from "../lib/ask/askResult";
 import { useAuth } from "../lib/auth/context";
@@ -98,7 +100,7 @@ export default function Home() {
 
   if (!ready) {
     return (
-      <main>
+      <main className="loading">
         <p>Loading…</p>
       </main>
     );
@@ -108,20 +110,34 @@ export default function Home() {
   }
 
   return (
-    <main className="home">
-      <header className="bar">
-        <h1>Your vault</h1>
-        <button className="link" onClick={signOut}>
+    <main className="shell">
+      <header className="topbar">
+        <Wordmark />
+        <span className="spacer" />
+        <ThemeToggle />
+        <button className="ghost" onClick={signOut}>
           Sign out
         </button>
       </header>
+
+      <h1 className="greeting">Your vault</h1>
+      <p className="sub">Ask for anything, or drop a file to keep it.</p>
+
       <AskBox onAsk={onAsk} busy={asking} />
-      {results !== null && <Results results={results} />}
+      {results !== null && (
+        <>
+          <p className="eyebrow">{results.length === 1 ? "1 result" : `${results.length} results`}</p>
+          <Results results={results} />
+        </>
+      )}
       {error && <p role="alert">{error}</p>}
-      <section className="drop">
+
+      <p className="eyebrow">Keep something new</p>
+      <div className="panel">
         <DropZone onFile={onFile} busy={busy} />
         <FileList files={files} />
-      </section>
+      </div>
+
       <Trace calls={calls} />
     </main>
   );

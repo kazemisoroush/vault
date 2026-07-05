@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { ThemeToggle } from "../../components/ThemeToggle";
+import { Wordmark } from "../../components/Wordmark";
 import { useAuth } from "../../lib/auth/context";
 
 export default function LoginPage() {
@@ -28,32 +30,38 @@ export default function LoginPage() {
   }
 
   return (
-    <main>
-      <h1>Sign in to Vault</h1>
-      <form onSubmit={onSubmit}>
-        <label>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
-        <button type="submit" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
-      {error && <p role="alert">{error}</p>}
+    <main className="login-shell">
+      <div className="corner-toggle">
+        <ThemeToggle />
+      </div>
+      <div className="login">
+        <Wordmark />
+        <p className="lede">Sign in to your vault.</p>
+        <form onSubmit={onSubmit}>
+          <label>
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
+          <button className="btn" type="submit" disabled={busy}>
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+        {error && <p role="alert">{error}</p>}
+      </div>
     </main>
   );
 }

@@ -12,8 +12,12 @@ File bytes move through the presigned URLs the API hands out.
   top, a drop surface below, and a trace of recent LLM calls at the bottom so
   the model's work is visible.
 - `components/`: the presentational pieces, an `AskBox` and `Results` for the
-  read side, a `DropZone` and `FileList` for the write side, and a `Trace` for
-  the recent LLM calls.
+  read side, a `DropZone` and `FileList` for the write side, a `Trace` for the
+  recent LLM calls, plus a `Wordmark` and a `ThemeToggle`.
+- Theme: CSS custom-property tokens with a light and dark palette driven by a
+  `data-theme` attribute, set before paint by a small script in the layout and
+  flipped by the `ThemeToggle` (`lib/theme.ts` holds the storage key). Fonts are
+  self-hosted via `next/font` (Fraunces, Hanken Grotesk, IBM Plex Mono).
 - `lib/config.ts`: the config layer. It reads `/config.json` at runtime, so the
   static build carries no environment-specific values.
 - `lib/api/`: the typed API client. `schema.ts` is generated from

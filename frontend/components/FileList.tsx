@@ -11,7 +11,7 @@ export function FileList({ files }: { files: VaultFile[] }) {
       {files.map((file) => (
         <li key={file.id}>
           <span className="name">{file.name}</span>
-          <span className={`status ${file.status}`}>{file.status}</span>
+          <span className={`badge ${file.status}`}>{file.status}</span>
         </li>
       ))}
     </ul>
