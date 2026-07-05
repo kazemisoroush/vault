@@ -1,29 +1,34 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
+	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/retrieve"
+	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
-// catalogLimit bounds the files sent to the retriever; a personal vault fits in one page.
-const catalogLimit = int32(500)
+// shortlistSize bounds the nearest files pulled from the vector store before the model re-ranks them.
+const shortlistSize = int32(20)
 
 // AskController answers a natural-language query with the matching files.
 type AskController struct {
 	index     index.Index
 	blobs     blob.Store
+	embedder  embed.Embedder
+	vectors   vectors.Store
 	retriever retrieve.Retriever
 }
 
 // NewAskController builds an AskController.
-func NewAskController(idx index.Index, blobs blob.Store, retriever retrieve.Retriever) *AskController {
-	return &AskController{index: idx, blobs: blobs, retriever: retriever}
+func NewAskController(idx index.Index, blobs blob.Store, embedder embed.Embedder, store vectors.Store, retriever retrieve.Retriever) *AskController {
+	return &AskController{index: idx, blobs: blobs, embedder: embedder, vectors: store, retriever: retriever}
 }
 
 type askRequest struct {
@@ -39,7 +44,8 @@ type askResponse struct {
 	Results []askResult `json:"results"`
 }
 
-// Ask lists the catalog, asks the retriever which files match, and presigns a download for each.
+// Ask embeds the query, pulls the nearest files from the vector store, lets the model re-rank
+// that shortlist, and presigns a download for each match. Cost is constant in the vault size.
 func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 	var req askRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -51,20 +57,28 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	files, _, err := c.index.List(r.Context(), catalogLimit, "")
+	vector, err := c.embedder.Embed(r.Context(), req.Query)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not read the index")
+		writeError(w, http.StatusInternalServerError, "could not embed the query")
 		return
 	}
 
-	ids, err := c.retriever.Match(r.Context(), req.Query, files)
+	nearest, err := c.vectors.Query(r.Context(), vector, shortlistSize)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not search the vectors")
+		return
+	}
+
+	shortlist := c.load(r.Context(), nearest)
+
+	ids, err := c.retriever.Match(r.Context(), req.Query, shortlist)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not run the search")
 		return
 	}
 
-	byID := make(map[string]domain.File, len(files))
-	for _, file := range files {
+	byID := make(map[string]domain.File, len(shortlist))
+	for _, file := range shortlist {
 		byID[file.ID] = file
 	}
 
@@ -83,4 +97,17 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, askResponse{Results: results})
+}
+
+// load fetches the records for the nearest ids, skipping any whose record has since gone.
+func (c *AskController) load(ctx context.Context, ids []string) []domain.File {
+	files := make([]domain.File, 0, len(ids))
+	for _, id := range ids {
+		file, err := c.index.Get(ctx, id)
+		if err != nil {
+			continue
+		}
+		files = append(files, file)
+	}
+	return files
 }

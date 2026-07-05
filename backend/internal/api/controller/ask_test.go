@@ -15,29 +15,50 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
-func askDeps(t *testing.T) (*mocks.MockIndex, *mocks.MockStore, *mocks.MockRetriever) {
+type askMocks struct {
+	index     *mocks.MockIndex
+	blobs     *mocks.MockStore
+	embedder  *mocks.MockEmbedder
+	vectors   *mocks.MockVectorStore
+	retriever *mocks.MockRetriever
+}
+
+func askDeps(t *testing.T) askMocks {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-	return mocks.NewMockIndex(ctrl), mocks.NewMockStore(ctrl), mocks.NewMockRetriever(ctrl)
+	return askMocks{
+		index:     mocks.NewMockIndex(ctrl),
+		blobs:     mocks.NewMockStore(ctrl),
+		embedder:  mocks.NewMockEmbedder(ctrl),
+		vectors:   mocks.NewMockVectorStore(ctrl),
+		retriever: mocks.NewMockRetriever(ctrl),
+	}
+}
+
+func (m askMocks) controller() *AskController {
+	return NewAskController(m.index, m.blobs, m.embedder, m.vectors, m.retriever)
 }
 
 func TestAskReturnsMatchesInOrder(t *testing.T) {
 	// Arrange
-	idx, blobs, retriever := askDeps(t)
+	m := askDeps(t)
+	vec := []float32{0.1, 0.2}
 	files := []domain.File{
 		{ID: "a", Name: "one", Key: "files/a"},
 		{ID: "b", Name: "two", Key: "files/b"},
 	}
-	idx.EXPECT().List(gomock.Any(), gomock.Any(), "").Return(files, "", nil)
-	retriever.EXPECT().Match(gomock.Any(), "petrol receipts", files).Return([]string{"b", "a"}, nil)
-	blobs.EXPECT().PresignGet(gomock.Any(), "files/b", gomock.Any()).Return("https://get/b", nil)
-	blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
-	c := NewAskController(idx, blobs, retriever)
+	m.embedder.EXPECT().Embed(gomock.Any(), "petrol receipts").Return(vec, nil)
+	m.vectors.EXPECT().Query(gomock.Any(), vec, shortlistSize).Return([]string{"a", "b"}, nil)
+	m.index.EXPECT().Get(gomock.Any(), "a").Return(files[0], nil)
+	m.index.EXPECT().Get(gomock.Any(), "b").Return(files[1], nil)
+	m.retriever.EXPECT().Match(gomock.Any(), "petrol receipts", files).Return([]string{"b", "a"}, nil)
+	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/b", gomock.Any()).Return("https://get/b", nil)
+	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"petrol receipts"}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.Ask(rec, req)
+	m.controller().Ask(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -48,13 +69,12 @@ func TestAskReturnsMatchesInOrder(t *testing.T) {
 
 func TestAskRejectsEmptyQuery(t *testing.T) {
 	// Arrange
-	idx, blobs, retriever := askDeps(t)
-	c := NewAskController(idx, blobs, retriever)
+	m := askDeps(t)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"   "}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.Ask(rec, req)
+	m.controller().Ask(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusBadRequest, rec.Code)
@@ -62,34 +82,70 @@ func TestAskRejectsEmptyQuery(t *testing.T) {
 
 func TestAskSkipsUnknownIDs(t *testing.T) {
 	// Arrange
-	idx, blobs, retriever := askDeps(t)
+	m := askDeps(t)
+	vec := []float32{0.1}
 	files := []domain.File{{ID: "a", Name: "one", Key: "files/a"}}
-	idx.EXPECT().List(gomock.Any(), gomock.Any(), "").Return(files, "", nil)
-	retriever.EXPECT().Match(gomock.Any(), gomock.Any(), files).Return([]string{"ghost", "a"}, nil)
-	blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
-	c := NewAskController(idx, blobs, retriever)
+	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
+	m.vectors.EXPECT().Query(gomock.Any(), vec, shortlistSize).Return([]string{"a"}, nil)
+	m.index.EXPECT().Get(gomock.Any(), "a").Return(files[0], nil)
+	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), files).Return([]string{"ghost", "a"}, nil)
+	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.Ask(rec, req)
+	m.controller().Ask(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, 1, strings.Count(rec.Body.String(), `"downloadUrl"`))
 }
 
-func TestAskReturnsErrorWhenRetrieverFails(t *testing.T) {
-	// Arrange
-	idx, blobs, retriever := askDeps(t)
-	idx.EXPECT().List(gomock.Any(), gomock.Any(), "").Return([]domain.File{}, "", nil)
-	retriever.EXPECT().Match(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, context.DeadlineExceeded)
-	c := NewAskController(idx, blobs, retriever)
+func TestAskSkipsRecordsThatVanished(t *testing.T) {
+	// Arrange: the vector store still has an id whose record was deleted.
+	m := askDeps(t)
+	vec := []float32{0.1}
+	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
+	m.vectors.EXPECT().Query(gomock.Any(), vec, shortlistSize).Return([]string{"ghost"}, nil)
+	m.index.EXPECT().Get(gomock.Any(), "ghost").Return(domain.File{}, context.DeadlineExceeded)
+	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), []domain.File{}).Return([]string{}, nil)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	c.Ask(rec, req)
+	m.controller().Ask(rec, req)
+
+	// Assert
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, 0, strings.Count(rec.Body.String(), `"downloadUrl"`))
+}
+
+func TestAskReturnsErrorWhenEmbedFails(t *testing.T) {
+	// Arrange
+	m := askDeps(t)
+	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(nil, context.DeadlineExceeded)
+	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
+	rec := httptest.NewRecorder()
+
+	// Act
+	m.controller().Ask(rec, req)
+
+	// Assert
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+func TestAskReturnsErrorWhenRetrieverFails(t *testing.T) {
+	// Arrange
+	m := askDeps(t)
+	vec := []float32{0.1}
+	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
+	m.vectors.EXPECT().Query(gomock.Any(), vec, shortlistSize).Return([]string{}, nil)
+	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, context.DeadlineExceeded)
+	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
+	rec := httptest.NewRecorder()
+
+	// Act
+	m.controller().Ask(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusInternalServerError, rec.Code)

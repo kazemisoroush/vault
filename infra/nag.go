@@ -16,7 +16,7 @@ func suppressNag(stack awscdk.Stack, healthRoute constructs.IConstruct) {
 		},
 		{
 			Id:     jsii.String("AwsSolutions-IAM5"),
-			Reason: jsii.String("Wildcards on the API role are scoped by design: S3 and DynamoDB object- and item-level access from the CDK grant helpers on the single Vault bucket and table, and bedrock:InvokeModel on Anthropic Claude foundation models and this account's inference profiles."),
+			Reason: jsii.String("Wildcards on the API role are scoped by design: S3 and DynamoDB object- and item-level access from the CDK grant helpers on the single Vault bucket and table, bedrock:InvokeModel on Anthropic Claude foundation models plus the Titan embeddings model and this account's inference profiles, and s3vectors data actions on the single Vault vector index."),
 		},
 		{
 			Id:     jsii.String("AwsSolutions-S1"),
