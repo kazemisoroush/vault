@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -12,24 +11,22 @@ import (
 
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
-	"github.com/kazemisoroush/vault/backend/internal/vectors"
+	"github.com/kazemisoroush/vault/backend/internal/search"
 )
 
 // FileController serves the five CRUD verbs over file records and their blobs.
 type FileController struct {
-	index    index.Index
-	blobs    blob.Store
-	embedder embed.Embedder
-	vectors  vectors.Store
-	now      func() time.Time
-	newID    func() string
+	index   index.Index
+	blobs   blob.Store
+	indexer search.Indexer
+	now     func() time.Time
+	newID   func() string
 }
 
 // NewFileController builds a file controller with a real clock and id generator.
-func NewFileController(idx index.Index, blobs blob.Store, embedder embed.Embedder, store vectors.Store) *FileController {
-	return &FileController{index: idx, blobs: blobs, embedder: embedder, vectors: store, now: time.Now, newID: uuid.NewString}
+func NewFileController(idx index.Index, blobs blob.Store, indexer search.Indexer) *FileController {
+	return &FileController{index: idx, blobs: blobs, indexer: indexer, now: time.Now, newID: uuid.NewString}
 }
 
 // dropRequest is the body of a POST /files call.
@@ -174,23 +171,13 @@ func (c *FileController) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Name or metadata changed, so the search text changed; re-embed to keep the vector current.
-	c.reembed(r.Context(), file)
+	// Name or metadata changed, so re-index to keep the search vector current. Non-fatal: the
+	// record is already saved and the vector can be rebuilt later.
+	if err := c.indexer.Index(r.Context(), file); err != nil {
+		log.Printf("re-index %s: %v", file.ID, err)
+	}
 
 	writeJSON(w, http.StatusOK, file)
-}
-
-// reembed refreshes a file's search vector after its name or metadata changed. A failure here is
-// logged, not fatal: the record is already saved and the vector can be rebuilt later.
-func (c *FileController) reembed(ctx context.Context, file domain.File) {
-	vector, err := c.embedder.Embed(ctx, file.SearchText())
-	if err != nil {
-		log.Printf("re-embed %s: %v", file.ID, err)
-		return
-	}
-	if err := c.vectors.Put(ctx, file.ID, vector); err != nil {
-		log.Printf("store vector for %s: %v", file.ID, err)
-	}
 }
 
 // Delete removes a file record and its bytes.
@@ -211,8 +198,8 @@ func (c *FileController) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The record and bytes are gone; a leftover vector is harmless, so a failure here is logged, not fatal.
-	if err := c.vectors.Delete(r.Context(), file.ID); err != nil {
-		log.Printf("delete vector for %s: %v", file.ID, err)
+	if err := c.indexer.Remove(r.Context(), file.ID); err != nil {
+		log.Printf("de-index %s: %v", file.ID, err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

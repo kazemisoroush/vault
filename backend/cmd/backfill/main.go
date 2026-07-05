@@ -12,6 +12,7 @@ import (
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
+	"github.com/kazemisoroush/vault/backend/internal/search"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
@@ -39,6 +40,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure vector store: %v", err)
 	}
+	indexer := search.NewVectorIndexer(embedder, store)
 
 	total := 0
 	for cursor := ""; ; {
@@ -47,13 +49,8 @@ func main() {
 			log.Fatalf("list files: %v", err)
 		}
 		for _, file := range files {
-			vector, err := embedder.Embed(ctx, file.SearchText())
-			if err != nil {
-				log.Printf("embed %s: %v", file.ID, err)
-				continue
-			}
-			if err := store.Put(ctx, file.ID, vector); err != nil {
-				log.Printf("store vector for %s: %v", file.ID, err)
+			if err := indexer.Index(ctx, file); err != nil {
+				log.Printf("index %s: %v", file.ID, err)
 				continue
 			}
 			total++

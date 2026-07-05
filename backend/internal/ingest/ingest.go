@@ -13,10 +13,9 @@ import (
 
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
-	"github.com/kazemisoroush/vault/backend/internal/vectors"
+	"github.com/kazemisoroush/vault/backend/internal/search"
 )
 
 // Handler fills a file's metadata after it lands in S3.
@@ -24,14 +23,13 @@ type Handler struct {
 	index     index.Index
 	blobs     blob.Store
 	extractor extract.Extractor
-	embedder  embed.Embedder
-	vectors   vectors.Store
+	indexer   search.Indexer
 	now       func() time.Time
 }
 
 // New builds an ingest Handler with a real clock.
-func New(idx index.Index, blobs blob.Store, extractor extract.Extractor, embedder embed.Embedder, store vectors.Store) *Handler {
-	return &Handler{index: idx, blobs: blobs, extractor: extractor, embedder: embedder, vectors: store, now: time.Now}
+func New(idx index.Index, blobs blob.Store, extractor extract.Extractor, indexer search.Indexer) *Handler {
+	return &Handler{index: idx, blobs: blobs, extractor: extractor, indexer: indexer, now: time.Now}
 }
 
 // Handle processes every object-created record in an S3 event.
@@ -74,21 +72,12 @@ func (h *Handler) handleKey(ctx context.Context, key string) error {
 		return err
 	}
 
-	h.embed(ctx, saved)
+	// Index the ready file so it can be found by meaning. Non-fatal: the record is already
+	// saved and can be re-indexed later.
+	if err := h.indexer.Index(ctx, saved); err != nil {
+		log.Printf("index %s: %v", saved.ID, err)
+	}
 	return nil
-}
-
-// embed stores the vector for a ready file so it can be found by meaning. A failure here is
-// logged, not fatal: the record is already saved and can be re-embedded later.
-func (h *Handler) embed(ctx context.Context, file domain.File) {
-	vector, err := h.embedder.Embed(ctx, file.SearchText())
-	if err != nil {
-		log.Printf("embed %s: %v", file.ID, err)
-		return
-	}
-	if err := h.vectors.Put(ctx, file.ID, vector); err != nil {
-		log.Printf("store vector for %s: %v", file.ID, err)
-	}
 }
 
 // save merges any extracted metadata, sets the status, persists the record, and returns it.

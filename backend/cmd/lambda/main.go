@@ -20,6 +20,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
 	"github.com/kazemisoroush/vault/backend/internal/retrieve"
+	"github.com/kazemisoroush/vault/backend/internal/search"
 	"github.com/kazemisoroush/vault/backend/internal/transport"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
@@ -62,7 +63,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure extractor: %v", err)
 	}
-	ingester := ingest.New(idx, blobs, extractor, embedder, vectorStore)
+	ingester := ingest.New(idx, blobs, extractor, search.NewVectorIndexer(embedder, vectorStore))
 
 	adapter := transport.New(proxy, ingester)
 	lambda.Start(adapter.Handle)

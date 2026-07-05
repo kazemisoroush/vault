@@ -15,13 +15,14 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/retrieve"
+	"github.com/kazemisoroush/vault/backend/internal/search"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 // New builds the API handler: controllers behind the router, wrapped in middleware.
 func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, embedder embed.Embedder, store vectors.Store, retriever retrieve.Retriever, calls controller.CallLister) (http.Handler, error) {
 	router := NewRouter(
-		controller.NewFileController(idx, blobs, embedder, store),
+		controller.NewFileController(idx, blobs, search.NewVectorIndexer(embedder, store)),
 		controller.NewAskController(idx, blobs, embedder, store, retriever),
 		controller.NewCallsController(calls),
 		controller.NewHealthController(),
