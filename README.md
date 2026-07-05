@@ -31,7 +31,8 @@ retrieval, a calls endpoint for the recent LLM trace, plus a health check for li
 - S3 objects transition to Intelligent-Tiering immediately, so storage cost drifts
   down on its own.
 - From milestone M2, an S3 event Lambda extracts free-form metadata from each dropped
-  file with an LLM.
+  file with an LLM (office documents are decoded to text first), and also captures the
+  file's own embedded metadata: image EXIF and office document properties.
 
 ## Commands
 
