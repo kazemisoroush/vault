@@ -41,6 +41,20 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 	return m.recorder
 }
 
+// Copy mocks base method.
+func (m *MockStore) Copy(ctx context.Context, srcKey, dstKey string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Copy", ctx, srcKey, dstKey)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Copy indicates an expected call of Copy.
+func (mr *MockStoreMockRecorder) Copy(ctx, srcKey, dstKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Copy", reflect.TypeOf((*MockStore)(nil).Copy), ctx, srcKey, dstKey)
+}
+
 // Delete mocks base method.
 func (m *MockStore) Delete(ctx context.Context, key string) error {
 	m.ctrl.T.Helper()

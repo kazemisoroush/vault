@@ -43,7 +43,7 @@ type dropResponse struct {
 	UploadURL string      `json:"uploadUrl"`
 }
 
-// Drop registers a file record and returns a presigned upload URL.
+// Drop registers a pending file under a temporary upload id and presigns a PUT to its staging key.
 func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 	var req dropRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -66,7 +66,7 @@ func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	file.Key = blob.Key(file.ID)
+	file.Key = blob.StagingKey(file.ID)
 
 	uploadURL, err := c.blobs.PresignPut(r.Context(), file.Key, file.ContentType, presignExpiry)
 	if err != nil {

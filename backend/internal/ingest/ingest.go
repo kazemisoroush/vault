@@ -3,6 +3,9 @@ package ingest
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -48,34 +51,65 @@ func (h *Handler) Handle(ctx context.Context, event events.S3Event) error {
 	return nil
 }
 
-// handleKey extracts metadata for one object and updates its record.
-func (h *Handler) handleKey(ctx context.Context, key string) error {
-	id := blob.IDFromKey(key)
+// handleKey settles one staged upload under its content hash, which makes a re-drop idempotent.
+func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
+	uploadID := blob.IDFromStagingKey(stagingKey)
 
-	file, err := h.index.Get(ctx, id)
+	pending, err := h.index.Get(ctx, uploadID)
+	if errors.Is(err, index.ErrNotFound) {
+		return nil // already settled, so a redelivered event is a no-op
+	}
 	if err != nil {
-		return fmt.Errorf("get record %q: %w", id, err)
+		return fmt.Errorf("get pending %q: %w", uploadID, err)
 	}
 
-	content, contentType, err := h.blobs.Get(ctx, file.Key)
+	content, contentType, err := h.blobs.Get(ctx, stagingKey)
 	if err != nil {
-		return fmt.Errorf("read bytes %q: %w", file.Key, err)
+		return fmt.Errorf("read staged %q: %w", stagingKey, err)
+	}
+
+	hash := hashHex(content)
+	file := pending
+	file.ID = hash
+	file.Key = blob.Key(hash)
+
+	if err := h.blobs.Copy(ctx, stagingKey, file.Key); err != nil {
+		return fmt.Errorf("copy to %q: %w", file.Key, err)
 	}
 
 	meta, err := h.extractor.Extract(ctx, content, contentType)
 	if err != nil {
-		log.Printf("extraction failed for %s: %v", id, err)
-		_, err := h.save(ctx, file, domain.StatusFailed, nil)
-		return err
+		log.Printf("extraction failed for %s: %v", hash, err)
+		if _, err := h.save(ctx, file, domain.StatusFailed, nil); err != nil {
+			return err
+		}
+		h.cleanup(ctx, uploadID, stagingKey)
+		return nil
 	}
 
 	saved, err := h.save(ctx, file, domain.StatusReady, meta)
 	if err != nil {
 		return err
 	}
-
 	h.embed(ctx, saved)
+	h.cleanup(ctx, uploadID, stagingKey)
 	return nil
+}
+
+// cleanup removes the settled file's staging record and object, logging failures rather than failing.
+func (h *Handler) cleanup(ctx context.Context, uploadID string, stagingKey string) {
+	if err := h.index.Delete(ctx, uploadID); err != nil {
+		log.Printf("delete pending %s: %v", uploadID, err)
+	}
+	if err := h.blobs.Delete(ctx, stagingKey); err != nil {
+		log.Printf("delete staging %s: %v", stagingKey, err)
+	}
+}
+
+// hashHex returns the SHA-256 of the content as hex, the id a file is stored under.
+func hashHex(content []byte) string {
+	sum := sha256.Sum256(content)
+	return hex.EncodeToString(sum[:])
 }
 
 // embed stores the vector for a ready file so it can be found by meaning. A failure here is

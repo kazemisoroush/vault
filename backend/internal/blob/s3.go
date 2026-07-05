@@ -76,6 +76,20 @@ func (s *S3Store) Get(ctx context.Context, key string) ([]byte, string, error) {
 	return data, contentType, nil
 }
 
+// Copy duplicates an object within the bucket, overwriting the destination.
+func (s *S3Store) Copy(ctx context.Context, srcKey string, dstKey string) error {
+	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(s.bucket),
+		CopySource: aws.String(s.bucket + "/" + srcKey),
+		Key:        aws.String(dstKey),
+	})
+	if err != nil {
+		return fmt.Errorf("copy object %q to %q: %w", srcKey, dstKey, err)
+	}
+
+	return nil
+}
+
 // Delete removes the object from the bucket.
 func (s *S3Store) Delete(ctx context.Context, key string) error {
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
