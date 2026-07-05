@@ -41,6 +41,7 @@ type askResult struct {
 }
 
 type askResponse struct {
+	Answer  string      `json:"answer,omitempty"`
 	Results []askResult `json:"results"`
 }
 
@@ -71,7 +72,7 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 
 	shortlist := c.load(r.Context(), nearest)
 
-	ids, err := c.retriever.Match(r.Context(), req.Query, shortlist)
+	answer, err := c.retriever.Match(r.Context(), req.Query, shortlist)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not run the search")
 		return
@@ -82,8 +83,8 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 		byID[file.ID] = file
 	}
 
-	results := make([]askResult, 0, len(ids))
-	for _, id := range ids {
+	results := make([]askResult, 0, len(answer.IDs))
+	for _, id := range answer.IDs {
 		file, ok := byID[id]
 		if !ok {
 			continue
@@ -96,7 +97,7 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 		results = append(results, askResult{File: file, DownloadURL: downloadURL})
 	}
 
-	writeJSON(w, http.StatusOK, askResponse{Results: results})
+	writeJSON(w, http.StatusOK, askResponse{Answer: answer.Text, Results: results})
 }
 
 // load fetches the records for the nearest ids, skipping any whose record has since gone.

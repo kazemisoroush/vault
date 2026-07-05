@@ -153,6 +153,8 @@ export interface components {
             downloadUrl: string;
         };
         AskResponse: {
+            /** @description A short human-readable answer drawn from the matched files, empty when there is none. */
+            answer?: string;
             results: components["schemas"]["AskResult"][];
         };
         LlmCall: {

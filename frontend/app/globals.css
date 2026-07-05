@@ -249,6 +249,31 @@ body {
   color: var(--muted);
 }
 
+/* Answer */
+.answer {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+
+.answer-text {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 550;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.answer-source {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
 /* Results */
 .results {
   list-style: none;

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Answer } from "../components/Answer";
 import { AskBox } from "../components/AskBox";
 import { DropZone } from "../components/DropZone";
 import { FileList } from "../components/FileList";
@@ -11,7 +12,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { Trace } from "../components/Trace";
 import { Wordmark } from "../components/Wordmark";
 import { ask } from "../lib/ask/ask";
-import type { AskResult } from "../lib/ask/askResult";
+import type { AskOutcome } from "../lib/ask/askOutcome";
 import { useAuth } from "../lib/auth/context";
 import { listCalls } from "../lib/calls/listCalls";
 import type { LlmCall } from "../lib/calls/llmCall";
@@ -28,7 +29,7 @@ export default function Home() {
   const [files, setFiles] = useState<VaultFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<AskResult[] | null>(null);
+  const [outcome, setOutcome] = useState<AskOutcome | null>(null);
   const [asking, setAsking] = useState(false);
   const [calls, setCalls] = useState<LlmCall[]>([]);
 
@@ -102,7 +103,7 @@ export default function Home() {
       setAsking(true);
       setError(null);
       try {
-        setResults(await ask(api, query));
+        setOutcome(await ask(api, query));
         await refreshCalls();
       } catch (err) {
         setError(err instanceof Error ? err.message : "search failed");
@@ -139,10 +140,11 @@ export default function Home() {
       <p className="sub">Ask for anything, or drop a file to keep it.</p>
 
       <AskBox onAsk={onAsk} busy={asking} />
-      {results !== null && (
+      {outcome !== null && (
         <>
-          <p className="eyebrow">{results.length === 1 ? "1 result" : `${results.length} results`}</p>
-          <Results results={results} />
+          {outcome.answer && <Answer answer={outcome.answer} source={outcome.results[0]?.file.name} />}
+          <p className="eyebrow">{outcome.results.length === 1 ? "1 result" : `${outcome.results.length} results`}</p>
+          <Results results={outcome.results} />
         </>
       )}
       {error && <p role="alert">{error}</p>}

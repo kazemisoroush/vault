@@ -12,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/kazemisoroush/vault/backend/internal/domain"
+	"github.com/kazemisoroush/vault/backend/internal/retrieve"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
@@ -51,7 +52,7 @@ func TestAskReturnsMatchesInOrder(t *testing.T) {
 	m.vectors.EXPECT().Query(gomock.Any(), vec, shortlistSize).Return([]string{"a", "b"}, nil)
 	m.index.EXPECT().Get(gomock.Any(), "a").Return(files[0], nil)
 	m.index.EXPECT().Get(gomock.Any(), "b").Return(files[1], nil)
-	m.retriever.EXPECT().Match(gomock.Any(), "petrol receipts", files).Return([]string{"b", "a"}, nil)
+	m.retriever.EXPECT().Match(gomock.Any(), "petrol receipts", files).Return(retrieve.Answer{Text: "your passport number is RA3495037", IDs: []string{"b", "a"}}, nil)
 	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/b", gomock.Any()).Return("https://get/b", nil)
 	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"petrol receipts"}`))
@@ -65,6 +66,7 @@ func TestAskReturnsMatchesInOrder(t *testing.T) {
 	body := rec.Body.String()
 	assert.Less(t, strings.Index(body, `"id":"b"`), strings.Index(body, `"id":"a"`))
 	assert.Contains(t, body, `"downloadUrl":"https://get/b"`)
+	assert.Contains(t, body, `"answer":"your passport number is RA3495037"`)
 }
 
 func TestAskRejectsEmptyQuery(t *testing.T) {
@@ -88,7 +90,7 @@ func TestAskSkipsUnknownIDs(t *testing.T) {
 	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
 	m.vectors.EXPECT().Query(gomock.Any(), vec, shortlistSize).Return([]string{"a"}, nil)
 	m.index.EXPECT().Get(gomock.Any(), "a").Return(files[0], nil)
-	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), files).Return([]string{"ghost", "a"}, nil)
+	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), files).Return(retrieve.Answer{IDs: []string{"ghost", "a"}}, nil)
 	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
 	rec := httptest.NewRecorder()
@@ -108,7 +110,7 @@ func TestAskSkipsRecordsThatVanished(t *testing.T) {
 	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
 	m.vectors.EXPECT().Query(gomock.Any(), vec, shortlistSize).Return([]string{"ghost"}, nil)
 	m.index.EXPECT().Get(gomock.Any(), "ghost").Return(domain.File{}, context.DeadlineExceeded)
-	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), []domain.File{}).Return([]string{}, nil)
+	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), []domain.File{}).Return(retrieve.Answer{IDs: []string{}}, nil)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
 	rec := httptest.NewRecorder()
 
@@ -140,7 +142,7 @@ func TestAskReturnsErrorWhenRetrieverFails(t *testing.T) {
 	vec := []float32{0.1}
 	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
 	m.vectors.EXPECT().Query(gomock.Any(), vec, shortlistSize).Return([]string{}, nil)
-	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, context.DeadlineExceeded)
+	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), gomock.Any()).Return(retrieve.Answer{}, context.DeadlineExceeded)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
 	rec := httptest.NewRecorder()
 
