@@ -7,23 +7,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseIDs(t *testing.T) {
+func TestParseAnswer(t *testing.T) {
 	tests := []struct {
-		name    string
-		reply   string
-		want    []string
-		wantErr bool
+		name       string
+		reply      string
+		wantText   string
+		wantIDs    []string
+		wantErr    bool
 	}{
-		{name: "bare array", reply: `["a","b"]`, want: []string{"a", "b"}},
-		{name: "with surrounding text", reply: `Here you go: ["x"] done`, want: []string{"x"}},
-		{name: "empty array", reply: `[]`, want: []string{}},
-		{name: "no array", reply: `none found`, wantErr: true},
+		{name: "answer and ids", reply: `{"answer":"RA3495037","ids":["a","b"]}`, wantText: "RA3495037", wantIDs: []string{"a", "b"}},
+		{name: "empty answer", reply: `{"answer":"","ids":["x"]}`, wantText: "", wantIDs: []string{"x"}},
+		{name: "no match", reply: `{"answer":"","ids":[]}`, wantText: "", wantIDs: []string{}},
+		{name: "with surrounding text", reply: "Here: {\"answer\":\"hi\",\"ids\":[\"z\"]} done", wantText: "hi", wantIDs: []string{"z"}},
+		{name: "no object", reply: `nothing here`, wantErr: true},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Act
-			got, err := parseIDs(tc.reply)
+			got, err := parseAnswer(tc.reply)
 
 			// Assert
 			if tc.wantErr {
@@ -31,7 +33,8 @@ func TestParseIDs(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantText, got.Text)
+			assert.Equal(t, tc.wantIDs, got.IDs)
 		})
 	}
 }

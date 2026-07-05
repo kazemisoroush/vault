@@ -12,15 +12,26 @@ describe("ask", () => {
         downloadUrl: "https://get/1",
       },
     ];
-    const post = vi.fn().mockResolvedValue({ data: { results } });
+    const post = vi.fn().mockResolvedValue({ data: { answer: "N1234567", results } });
     const api = { POST: post } as unknown as ApiClient;
 
     // Act
-    const got = await ask(api, "petrol receipts");
+    const got = await ask(api, "passport number");
 
     // Assert
-    expect(post).toHaveBeenCalledWith("/ask", { body: { query: "petrol receipts" } });
-    expect(got).toEqual(results);
+    expect(post).toHaveBeenCalledWith("/ask", { body: { query: "passport number" } });
+    expect(got).toEqual({ answer: "N1234567", results });
+  });
+
+  it("defaults the answer to empty when absent", async () => {
+    // Arrange
+    const api = { POST: vi.fn().mockResolvedValue({ data: { results: [] } }) } as unknown as ApiClient;
+
+    // Act
+    const got = await ask(api, "anything");
+
+    // Assert
+    expect(got).toEqual({ answer: "", results: [] });
   });
 
   it("throws when the API returns an error", async () => {

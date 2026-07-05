@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	domain "github.com/kazemisoroush/vault/backend/internal/domain"
+	retrieve "github.com/kazemisoroush/vault/backend/internal/retrieve"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -42,10 +43,10 @@ func (m *MockRetriever) EXPECT() *MockRetrieverMockRecorder {
 }
 
 // Match mocks base method.
-func (m *MockRetriever) Match(ctx context.Context, query string, files []domain.File) ([]string, error) {
+func (m *MockRetriever) Match(ctx context.Context, query string, files []domain.File) (retrieve.Answer, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Match", ctx, query, files)
-	ret0, _ := ret[0].([]string)
+	ret0, _ := ret[0].(retrieve.Answer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

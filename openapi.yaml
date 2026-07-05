@@ -222,6 +222,9 @@ components:
       type: object
       required: [results]
       properties:
+        answer:
+          type: string
+          description: A short human-readable answer drawn from the matched files, empty when there is none.
         results:
           type: array
           items: { $ref: '#/components/schemas/AskResult' }

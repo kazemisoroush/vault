@@ -6,16 +6,23 @@ import (
 	"strings"
 )
 
-// parseIDs pulls the JSON array of ids out of the model reply, ignoring any surrounding text.
-func parseIDs(reply string) ([]string, error) {
-	start := strings.Index(reply, "[")
-	end := strings.LastIndex(reply, "]")
+// answerPayload is the JSON shape the model replies with.
+type answerPayload struct {
+	Answer string   `json:"answer"`
+	IDs    []string `json:"ids"`
+}
+
+// parseAnswer pulls the {answer, ids} JSON object out of the model reply, ignoring surrounding text.
+func parseAnswer(reply string) (Answer, error) {
+	start := strings.Index(reply, "{")
+	end := strings.LastIndex(reply, "}")
 	if start < 0 || end < start {
-		return nil, fmt.Errorf("no id array in reply")
+		return Answer{}, fmt.Errorf("no answer object in reply")
 	}
-	var ids []string
-	if err := json.Unmarshal([]byte(reply[start:end+1]), &ids); err != nil {
-		return nil, fmt.Errorf("unmarshal ids: %w", err)
+
+	var payload answerPayload
+	if err := json.Unmarshal([]byte(reply[start:end+1]), &payload); err != nil {
+		return Answer{}, fmt.Errorf("unmarshal answer: %w", err)
 	}
-	return ids, nil
+	return Answer{Text: payload.Answer, IDs: payload.IDs}, nil
 }

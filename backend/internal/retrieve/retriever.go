@@ -1,4 +1,4 @@
-// Package retrieve finds the files that match a natural-language query.
+// Package retrieve answers a natural-language query over the matched files.
 package retrieve
 
 import (
@@ -9,7 +9,7 @@ import (
 
 //go:generate go tool mockgen -source=retriever.go -destination=../mocks/retriever_mock.go -package=mocks
 
-// Retriever returns the ids of the files matching a query, most relevant first.
+// Retriever answers a query over the given files: the matching ids and a human-readable answer.
 type Retriever interface {
-	Match(ctx context.Context, query string, files []domain.File) ([]string, error)
+	Match(ctx context.Context, query string, files []domain.File) (Answer, error)
 }

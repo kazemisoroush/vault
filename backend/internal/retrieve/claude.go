@@ -10,13 +10,15 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
-// instruction tells the model to act as the vault's search index and return only ids.
-const instruction = `You are the search index for a personal file vault.
+// instruction tells the model to answer the request and return the matching ids.
+const instruction = `You are a personal file vault assistant.
 You are given a JSON catalog of files (id, name, free-form meta, createdAt) and a request.
-Return ONLY a JSON array of the ids that match the request, most relevant first.
-Match on meaning and on time, for example "last month" against createdAt. Return [] if none match. No commentary.`
+Reply with ONLY a JSON object: {"answer": string, "ids": [string]}.
+- ids: the file ids that match, most relevant first; [] if none. Match on meaning and on time, for example "last month" against createdAt. When you give an answer, the id of the file it is drawn from must be first.
+- answer: a short, direct, human-readable answer to the request, drawn ONLY from the metadata shown. If the request is a plain find, or the metadata does not contain the answer, use "".
+No markdown, no commentary, only the JSON object.`
 
-// maxTokens caps the reply to a list of ids.
+// maxTokens caps the reply to a short answer and a list of ids.
 const maxTokens = 1024
 
 // ClaudeRetriever matches files using Claude on Amazon Bedrock, the same model the extractor uses.
@@ -29,22 +31,22 @@ func NewClaudeRetriever(_ context.Context, region, model string, recorder llm.Re
 	return &ClaudeRetriever{model: llm.NewModel(region, model, "retrieve", recorder)}, nil
 }
 
-// Match asks the model which catalog ids satisfy the query.
-func (r *ClaudeRetriever) Match(ctx context.Context, query string, files []domain.File) ([]string, error) {
+// Match asks the model to answer the query over the catalog and return the matching ids.
+func (r *ClaudeRetriever) Match(ctx context.Context, query string, files []domain.File) (Answer, error) {
 	catalog, err := buildCatalog(files)
 	if err != nil {
-		return nil, err
+		return Answer{}, err
 	}
 	prompt := fmt.Sprintf("Catalog:\n%s\n\nRequest: %s", catalog, query)
 
 	reply, err := r.model.Complete(ctx, instruction+"\n\n"+prompt, maxTokens, anthropic.NewTextBlock(instruction), anthropic.NewTextBlock(prompt))
 	if err != nil {
-		return nil, fmt.Errorf("bedrock retrieve: %w", err)
+		return Answer{}, fmt.Errorf("bedrock retrieve: %w", err)
 	}
 
-	ids, err := parseIDs(reply)
+	answer, err := parseAnswer(reply)
 	if err != nil {
-		return nil, fmt.Errorf("parse ids: %w", err)
+		return Answer{}, fmt.Errorf("parse answer: %w", err)
 	}
-	return ids, nil
+	return answer, nil
 }
