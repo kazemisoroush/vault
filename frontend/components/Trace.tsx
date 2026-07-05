@@ -15,45 +15,55 @@ export function Trace({ calls }: { calls: LlmCall[] }) {
   return (
     <section className="trace">
       <h2>Recent LLM calls</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>op</th>
-            <th>latency</th>
-            <th>tokens in/out</th>
-            <th>status</th>
-            <th>when</th>
-          </tr>
-        </thead>
-        <tbody>
-          {calls.map((call, index) => {
-            const key = `${call.createdAt}-${index}`;
-            return (
-              <Fragment key={key}>
-                <tr className="row" onClick={() => setOpen(open === key ? null : key)}>
-                  <td>{call.op}</td>
-                  <td>{call.latencyMs} ms</td>
-                  <td>
-                    {call.inputTokens}/{call.outputTokens}
-                  </td>
-                  <td className={call.ok ? "ok" : "fail"}>{call.ok ? "ok" : "failed"}</td>
-                  <td>{new Date(call.createdAt).toLocaleTimeString()}</td>
-                </tr>
-                {open === key && (
-                  <tr className="detail">
-                    <td colSpan={5}>
-                      <p className="muted">prompt</p>
-                      <pre>{call.prompt}</pre>
-                      <p className="muted">reply</p>
-                      <pre>{call.error ? call.error : call.reply}</pre>
+      <div className="tracewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>op</th>
+              <th>latency</th>
+              <th>tokens in/out</th>
+              <th>status</th>
+              <th>when</th>
+            </tr>
+          </thead>
+          <tbody>
+            {calls.map((call, index) => {
+              const key = `${call.createdAt}-${index}`;
+              return (
+                <Fragment key={key}>
+                  <tr className="row" onClick={() => setOpen(open === key ? null : key)}>
+                    <td>
+                      <span className="op">{call.op}</span>
                     </td>
+                    <td className="num">{call.latencyMs} ms</td>
+                    <td className="num">
+                      {call.inputTokens} / {call.outputTokens}
+                    </td>
+                    <td>
+                      <span className={call.ok ? "dot ok" : "dot fail"}>{call.ok ? "ok" : "failed"}</span>
+                    </td>
+                    <td className="when">{new Date(call.createdAt).toLocaleTimeString()}</td>
                   </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+                  {open === key && (
+                    <tr className="detail">
+                      <td colSpan={5}>
+                        <div className="kv">
+                          <span className="k">prompt</span>
+                          <pre>{call.prompt}</pre>
+                        </div>
+                        <div className="kv">
+                          <span className="k">reply</span>
+                          <pre>{call.error ? call.error : call.reply}</pre>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
