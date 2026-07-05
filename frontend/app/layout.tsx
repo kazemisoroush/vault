@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Hanken_Grotesk, IBM_Plex_Mono } from "next/font/google";
 
 import { AuthProvider } from "../lib/auth/context";
+import { THEME_STORAGE_KEY } from "../lib/theme";
 import "./globals.css";
 
 const display = Fraunces({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-display" });
@@ -13,8 +14,9 @@ export const metadata: Metadata = {
   description: "Your personal data vault",
 };
 
-// themeScript sets the theme before paint so there is no flash of the wrong palette.
-const themeScript = `(function(){try{var t=localStorage.getItem('vault-theme');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;}catch(e){}})();`;
+// themeScript sets the theme before paint so there is no flash of the wrong palette. The only
+// interpolation is the build-time constant key, so it stays safe to inline.
+const themeScript = `(function(){try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

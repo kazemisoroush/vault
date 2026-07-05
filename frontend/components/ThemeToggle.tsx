@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { THEME_STORAGE_KEY } from "../lib/theme";
+
 // ThemeToggle switches between light and dark and persists the choice. The initial theme is
 // set before paint by the inline script in the layout, so this only reflects and flips it.
 export function ThemeToggle() {
@@ -16,7 +18,7 @@ export function ThemeToggle() {
     setTheme(next);
     document.documentElement.dataset.theme = next;
     try {
-      localStorage.setItem("vault-theme", next);
+      localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
       // ignore storage failures
     }
