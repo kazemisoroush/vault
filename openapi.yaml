@@ -172,20 +172,25 @@ components:
         updatedAt: { type: string, format: date-time }
     CreateFileRequest:
       type: object
-      required: [name, contentType]
+      required: [name, contentType, hash]
       properties:
         name: { type: string }
         contentType: { type: string }
         size: { type: integer, format: int64 }
+        hash:
+          type: string
+          description: The content hash (SHA-256 hex) that identifies the file; the same bytes always hash the same.
         meta:
           type: object
           additionalProperties: { type: string }
     CreateFileResponse:
       type: object
-      required: [file, uploadUrl]
+      required: [file]
       properties:
         file: { $ref: '#/components/schemas/File' }
-        uploadUrl: { type: string }
+        uploadUrl:
+          type: string
+          description: Presigned PUT for the bytes; absent when the file already exists (a duplicate drop).
     GetFileResponse:
       type: object
       required: [file, downloadUrl]

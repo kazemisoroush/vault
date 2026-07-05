@@ -2,12 +2,11 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
@@ -21,26 +20,26 @@ type FileController struct {
 	blobs   blob.Store
 	vectors vectors.Store
 	now     func() time.Time
-	newID   func() string
 }
 
-// NewFileController builds a file controller with a real clock and id generator.
+// NewFileController builds a file controller with a real clock.
 func NewFileController(idx index.Index, blobs blob.Store, store vectors.Store) *FileController {
-	return &FileController{index: idx, blobs: blobs, vectors: store, now: time.Now, newID: uuid.NewString}
+	return &FileController{index: idx, blobs: blobs, vectors: store, now: time.Now}
 }
 
-// dropRequest is the body of a POST /files call.
+// dropRequest is the body of a POST /files call. Hash is the content hash that identifies the file.
 type dropRequest struct {
 	Name        string            `json:"name"`
 	ContentType string            `json:"contentType"`
 	Size        int64             `json:"size"`
+	Hash        string            `json:"hash"`
 	Meta        map[string]string `json:"meta"`
 }
 
-// dropResponse is the body returned by a POST /files call.
+// dropResponse is the body returned by a POST /files call. UploadURL is absent for a duplicate.
 type dropResponse struct {
 	File      domain.File `json:"file"`
-	UploadURL string      `json:"uploadUrl"`
+	UploadURL string      `json:"uploadUrl,omitempty"`
 }
 
 // Drop registers a file record and returns a presigned upload URL.
@@ -50,14 +49,26 @@ func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if req.Name == "" || req.ContentType == "" {
-		writeError(w, http.StatusBadRequest, "name and contentType are required")
+	if req.Name == "" || req.ContentType == "" || req.Hash == "" {
+		writeError(w, http.StatusBadRequest, "name, contentType and hash are required")
+		return
+	}
+
+	// The content hash is the file id, so the same bytes always map to one record. If it already
+	// exists, this is a duplicate drop: return the existing file and no upload URL.
+	existing, err := c.index.Get(r.Context(), req.Hash)
+	if err == nil {
+		writeJSON(w, http.StatusOK, dropResponse{File: existing})
+		return
+	}
+	if !errors.Is(err, index.ErrNotFound) {
+		writeError(w, http.StatusInternalServerError, "could not check the vault")
 		return
 	}
 
 	now := c.now().UTC()
 	file := domain.File{
-		ID:          c.newID(),
+		ID:          req.Hash,
 		Name:        req.Name,
 		ContentType: req.ContentType,
 		Size:        req.Size,

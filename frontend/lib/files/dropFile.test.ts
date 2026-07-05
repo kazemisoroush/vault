@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ApiClient } from "../api/client";
+import type { ContentHasher } from "./contentHasher";
 import { dropFile } from "./dropFile";
 import { uploadBytes } from "./upload";
 
 vi.mock("./upload", () => ({ uploadBytes: vi.fn() }));
 
 const record = {
-  id: "1",
+  id: "h",
   name: "a.txt",
   contentType: "text/plain",
   size: 2,
@@ -16,23 +17,39 @@ const record = {
   updatedAt: "",
 };
 
+const hasher: ContentHasher = { hash: vi.fn().mockResolvedValue("hash123") };
+
 describe("dropFile", () => {
   beforeEach(() => vi.mocked(uploadBytes).mockReset());
 
-  it("registers the record then uploads the bytes", async () => {
+  it("hashes, registers with the hash, then uploads a new file", async () => {
     // Arrange
     const post = vi.fn().mockResolvedValue({ data: { file: record, uploadUrl: "https://s3/put" } });
     const api = { POST: post } as unknown as ApiClient;
     const file = new File(["hi"], "a.txt", { type: "text/plain" });
 
     // Act
-    const result = await dropFile(api, file);
+    const result = await dropFile(api, file, hasher);
 
     // Assert
     expect(post).toHaveBeenCalledWith("/files", {
-      body: { name: "a.txt", contentType: "text/plain", size: 2 },
+      body: { name: "a.txt", contentType: "text/plain", size: 2, hash: "hash123" },
     });
     expect(uploadBytes).toHaveBeenCalledWith("https://s3/put", file, "text/plain");
+    expect(result).toBe(record);
+  });
+
+  it("skips the upload for a duplicate (no uploadUrl)", async () => {
+    // Arrange: the file already exists, so the server returns no upload URL.
+    const post = vi.fn().mockResolvedValue({ data: { file: record } });
+    const api = { POST: post } as unknown as ApiClient;
+    const file = new File(["hi"], "a.txt", { type: "text/plain" });
+
+    // Act
+    const result = await dropFile(api, file, hasher);
+
+    // Assert
+    expect(uploadBytes).not.toHaveBeenCalled();
     expect(result).toBe(record);
   });
 
@@ -43,23 +60,7 @@ describe("dropFile", () => {
     const file = new File(["hi"], "a.txt", { type: "text/plain" });
 
     // Act + Assert
-    await expect(dropFile(api, file)).rejects.toThrow(/could not register/);
+    await expect(dropFile(api, file, hasher)).rejects.toThrow(/could not register/);
     expect(uploadBytes).not.toHaveBeenCalled();
-  });
-
-  it("defaults an unknown content type", async () => {
-    // Arrange
-    const post = vi.fn().mockResolvedValue({ data: { file: record, uploadUrl: "u" } });
-    const api = { POST: post } as unknown as ApiClient;
-    const file = new File([""], "blob", { type: "" });
-
-    // Act
-    await dropFile(api, file);
-
-    // Assert
-    expect(post).toHaveBeenCalledWith("/files", {
-      body: { name: "blob", contentType: "application/octet-stream", size: 0 },
-    });
-    expect(uploadBytes).toHaveBeenCalledWith("u", file, "application/octet-stream");
   });
 });

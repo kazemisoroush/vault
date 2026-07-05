@@ -1,19 +1,23 @@
 import type { ApiClient } from "../api/client";
+import type { ContentHasher } from "./contentHasher";
 import { uploadBytes } from "./upload";
 import type { VaultFile } from "./vaultFile";
 
-// dropFile registers a file record, then PUTs its bytes to the returned presigned URL.
-// The extractor fills the metadata once the bytes land, so no metadata is typed here.
-export async function dropFile(api: ApiClient, file: File): Promise<VaultFile> {
+// dropFile hashes the file's content, registers it (the hash is its id, so an identical file is a
+// no-op), then uploads the bytes only when the file is new. The extractor fills the metadata later.
+export async function dropFile(api: ApiClient, file: File, hasher: ContentHasher): Promise<VaultFile> {
   const contentType = file.type || "application/octet-stream";
+  const hash = await hasher.hash(file);
 
   const { data, error } = await api.POST("/files", {
-    body: { name: file.name, contentType, size: file.size },
+    body: { name: file.name, contentType, size: file.size, hash },
   });
   if (error || !data) {
     throw new Error("could not register the file");
   }
 
-  await uploadBytes(data.uploadUrl, file, contentType);
+  if (data.uploadUrl) {
+    await uploadBytes(data.uploadUrl, file, contentType);
+  }
   return data.file;
 }

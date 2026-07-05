@@ -123,13 +123,16 @@ export interface components {
             contentType: string;
             /** Format: int64 */
             size?: number;
+            /** @description The content hash (SHA-256 hex) that identifies the file; the same bytes always hash the same. */
+            hash: string;
             meta?: {
                 [key: string]: string;
             };
         };
         CreateFileResponse: {
             file: components["schemas"]["File"];
-            uploadUrl: string;
+            /** @description Presigned PUT for the bytes; absent when the file already exists (a duplicate drop). */
+            uploadUrl?: string;
         };
         GetFileResponse: {
             file: components["schemas"]["File"];

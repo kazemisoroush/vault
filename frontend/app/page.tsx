@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Answer } from "../components/Answer";
@@ -18,6 +18,7 @@ import { listCalls } from "../lib/calls/listCalls";
 import type { LlmCall } from "../lib/calls/llmCall";
 import { deleteFile } from "../lib/files/deleteFile";
 import { dropFile } from "../lib/files/dropFile";
+import { StreamingSha256 } from "../lib/files/streamingSha256";
 import { listFiles } from "../lib/files/listFiles";
 import type { VaultFile } from "../lib/files/vaultFile";
 
@@ -66,13 +67,15 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [authenticated, refresh, refreshCalls]);
 
+  const hasher = useMemo(() => new StreamingSha256(), []);
+
   const onFile = useCallback(
     async (file: File) => {
       if (!api) return;
       setBusy(true);
       setError(null);
       try {
-        await dropFile(api, file);
+        await dropFile(api, file, hasher);
         await refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "drop failed");
@@ -80,7 +83,7 @@ export default function Home() {
         setBusy(false);
       }
     },
-    [api, refresh],
+    [api, hasher, refresh],
   );
 
   const onDelete = useCallback(

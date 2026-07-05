@@ -3,6 +3,8 @@ package ingest
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"maps"
@@ -57,9 +59,23 @@ func (h *Handler) handleKey(ctx context.Context, key string) error {
 		return fmt.Errorf("get record %q: %w", id, err)
 	}
 
+	// Already done: S3 can deliver the event more than once, and the content is immutable (the id
+	// is its hash), so re-extracting would only repeat the work.
+	if file.Status == domain.StatusReady {
+		return nil
+	}
+
 	content, contentType, err := h.blobs.Get(ctx, file.Key)
 	if err != nil {
 		return fmt.Errorf("read bytes %q: %w", file.Key, err)
+	}
+
+	// The id is the content hash, so the bytes must hash to it; otherwise the upload is not what
+	// was registered and is marked failed rather than trusted.
+	if sum := hashHex(content); sum != id {
+		log.Printf("content hash mismatch for %s: bytes hash to %s", id, sum)
+		_, err := h.save(ctx, file, domain.StatusFailed, nil)
+		return err
 	}
 
 	meta, err := h.extractor.Extract(ctx, content, contentType)
@@ -89,6 +105,12 @@ func (h *Handler) embed(ctx context.Context, file domain.File) {
 	if err := h.vectors.Put(ctx, file.ID, vector); err != nil {
 		log.Printf("store vector for %s: %v", file.ID, err)
 	}
+}
+
+// hashHex returns the SHA-256 of the content as hex, the form used for the file id.
+func hashHex(content []byte) string {
+	sum := sha256.Sum256(content)
+	return hex.EncodeToString(sum[:])
 }
 
 // save merges any extracted metadata, sets the status, persists the record, and returns it.
