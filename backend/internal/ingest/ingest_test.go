@@ -13,6 +13,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/kazemisoroush/vault/backend/internal/domain"
+	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
@@ -125,11 +126,26 @@ func TestSettleReadErrorIsReturned(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestSettleMissingPendingIsReturned(t *testing.T) {
+func TestSettleAlreadySettledIsNoOp(t *testing.T) {
+	// Arrange: the pending record is gone, so this is a redelivered event for a settled file.
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{}, index.ErrNotFound)
+
+	h := ingest.New(idx, mocks.NewMockStore(ctrl), mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+
+	// Act
+	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
+
+	// Assert: no-op, no error, nothing else touched.
+	require.NoError(t, err)
+}
+
+func TestSettleGetErrorIsReturned(t *testing.T) {
 	// Arrange
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)
-	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{}, errors.New("not found"))
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{}, errors.New("dynamo down"))
 
 	h := ingest.New(idx, mocks.NewMockStore(ctrl), mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 

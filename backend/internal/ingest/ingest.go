@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -50,14 +51,14 @@ func (h *Handler) Handle(ctx context.Context, event events.S3Event) error {
 	return nil
 }
 
-// handleKey settles one staged upload: hash the bytes, move them to their content-addressed key,
-// extract and embed, write the record under the content hash, then remove the staging record and
-// object. Keying everything by the hash makes a re-drop of the same bytes overwrite, so it is
-// idempotent and leaves no duplicates.
+// handleKey settles one staged upload under its content hash, which makes a re-drop idempotent.
 func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
 	uploadID := blob.IDFromStagingKey(stagingKey)
 
 	pending, err := h.index.Get(ctx, uploadID)
+	if errors.Is(err, index.ErrNotFound) {
+		return nil // already settled, so a redelivered event is a no-op
+	}
 	if err != nil {
 		return fmt.Errorf("get pending %q: %w", uploadID, err)
 	}
@@ -72,7 +73,6 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
 	file.ID = hash
 	file.Key = blob.Key(hash)
 
-	// Move the bytes to their content-addressed home before trusting them; a re-drop overwrites.
 	if err := h.blobs.Copy(ctx, stagingKey, file.Key); err != nil {
 		return fmt.Errorf("copy to %q: %w", file.Key, err)
 	}
@@ -96,8 +96,7 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
 	return nil
 }
 
-// cleanup removes the staging record and object once the file has settled under its content hash.
-// Failures are logged, not fatal: a lifecycle rule expires stray staging objects.
+// cleanup removes the settled file's staging record and object, logging failures rather than failing.
 func (h *Handler) cleanup(ctx context.Context, uploadID string, stagingKey string) {
 	if err := h.index.Delete(ctx, uploadID); err != nil {
 		log.Printf("delete pending %s: %v", uploadID, err)

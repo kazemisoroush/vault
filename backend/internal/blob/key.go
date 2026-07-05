@@ -2,8 +2,7 @@ package blob
 
 import "strings"
 
-// keyPrefix is the S3 namespace for stored (content-addressed) file blobs; stagingPrefix is where a
-// fresh upload lands before it is hashed and moved to its content-addressed key.
+// keyPrefix holds content-addressed file blobs and stagingPrefix holds fresh uploads awaiting a hash.
 const (
 	keyPrefix     = "files/"
 	stagingPrefix = "uploads/"

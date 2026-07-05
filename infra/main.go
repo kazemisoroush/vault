@@ -70,8 +70,7 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 				}},
 			},
 			{
-				// Ingest copies each staged upload to its content-addressed key and deletes it; this
-				// expires any staging object a failed ingest left behind.
+				// A failed ingest can leave a staging object behind, so expire the staging prefix.
 				Prefix:     jsii.String(stagingKeyPrefix),
 				Expiration: awscdk.Duration_Days(jsii.Number(1)),
 			},
@@ -177,8 +176,7 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Resources: jsii.Strings(vectorArn, vectorArn+"/index/"+vectorIndexName),
 	}))
 
-	// Ingest fires on staged uploads only; the content-addressed copy under files/ must not
-	// re-trigger it, so the filter watches the staging prefix.
+	// Watch only the staging prefix so the content-addressed copy under files/ does not re-trigger ingest.
 	bucket.AddEventNotification(
 		awss3.EventType_OBJECT_CREATED,
 		awss3notifications.NewLambdaDestination(fn),

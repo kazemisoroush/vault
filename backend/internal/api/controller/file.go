@@ -43,8 +43,7 @@ type dropResponse struct {
 	UploadURL string      `json:"uploadUrl"`
 }
 
-// Drop registers a pending file under a temporary upload id and returns a presigned URL to the
-// staging key. Ingest hashes the bytes and settles the record under its content hash.
+// Drop registers a pending file under a temporary upload id and presigns a PUT to its staging key.
 func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 	var req dropRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
