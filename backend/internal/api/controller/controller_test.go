@@ -29,7 +29,7 @@ func TestDropCreatesPendingRecord(t *testing.T) {
 	c := NewFileController(idx, blobs, store)
 	c.now = func() time.Time { return time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC) }
 	c.newID = func() string { return "test-id" }
-	blobs.EXPECT().PresignPut(gomock.Any(), "files/test-id", "image/jpeg", presignExpiry).Return("https://upload", nil)
+	blobs.EXPECT().PresignPut(gomock.Any(), "uploads/test-id", "image/jpeg", presignExpiry).Return("https://upload", nil)
 	var saved domain.File
 	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
 		saved = f
@@ -44,7 +44,7 @@ func TestDropCreatesPendingRecord(t *testing.T) {
 	// Assert
 	require.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, domain.StatusPending, saved.Status)
-	assert.Equal(t, "files/test-id", saved.Key)
+	assert.Equal(t, "uploads/test-id", saved.Key)
 	assert.Contains(t, rec.Body.String(), `"uploadUrl":"https://upload"`)
 	assert.Contains(t, rec.Body.String(), `"id":"test-id"`)
 }

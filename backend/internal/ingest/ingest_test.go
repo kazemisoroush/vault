@@ -2,6 +2,8 @@ package ingest_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"testing"
 
@@ -22,86 +24,117 @@ func s3Event(key string) events.S3Event {
 	}}
 }
 
-func TestHandleExtractionSucceeds(t *testing.T) {
+// hashOf returns the SHA-256 hex of content, the id a file settles under.
+func hashOf(content []byte) string {
+	sum := sha256.Sum256(content)
+	return hex.EncodeToString(sum[:])
+}
+
+func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 	// Arrange
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
 	extractor := mocks.NewMockExtractor(ctrl)
+	embedder := mocks.NewMockEmbedder(ctrl)
+	store := mocks.NewMockVectorStore(ctrl)
 
-	stored := domain.File{ID: "abc", Key: "files/abc", Status: domain.StatusPending, Meta: map[string]string{"note": "keep"}}
-	idx.EXPECT().Get(gomock.Any(), "abc").Return(stored, nil)
-	blobs.EXPECT().Get(gomock.Any(), "files/abc").Return([]byte("bytes"), "image/jpeg", nil)
-	extractor.EXPECT().Extract(gomock.Any(), []byte("bytes"), "image/jpeg").
-		Return(map[string]string{"vendor": "Shell", "amount": "52.30"}, nil)
+	content := []byte("the file bytes")
+	hash := hashOf(content)
+	staging := "uploads/upl-1"
+	canonical := "files/" + hash
+	pending := domain.File{ID: "upl-1", Key: staging, Name: "petrol.jpg", Status: domain.StatusPending, Meta: map[string]string{"note": "keep"}}
 
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
+	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
+	blobs.EXPECT().Copy(gomock.Any(), staging, canonical).Return(nil)
+	extractor.EXPECT().Extract(gomock.Any(), content, "image/jpeg").Return(map[string]string{"vendor": "Shell"}, nil)
 	var saved domain.File
 	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
 		saved = f
 		return nil
 	})
-
-	embedder := mocks.NewMockEmbedder(ctrl)
-	store := mocks.NewMockVectorStore(ctrl)
-	embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return([]float32{0.1, 0.2}, nil)
-	store.EXPECT().Put(gomock.Any(), "abc", []float32{0.1, 0.2}).Return(nil)
+	embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return([]float32{0.1}, nil)
+	store.EXPECT().Put(gomock.Any(), hash, []float32{0.1}).Return(nil)
+	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
+	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
 	h := ingest.New(idx, blobs, extractor, embedder, store)
 
 	// Act
-	err := h.Handle(context.Background(), s3Event("files/abc"))
+	err := h.Handle(context.Background(), s3Event(staging))
 
-	// Assert
+	// Assert: the record settled under the content hash, keeping the name and metadata.
 	require.NoError(t, err)
+	assert.Equal(t, hash, saved.ID)
+	assert.Equal(t, canonical, saved.Key)
 	assert.Equal(t, domain.StatusReady, saved.Status)
+	assert.Equal(t, "petrol.jpg", saved.Name)
 	assert.Equal(t, "Shell", saved.Meta["vendor"])
-	assert.Equal(t, "52.30", saved.Meta["amount"])
 	assert.Equal(t, "keep", saved.Meta["note"])
 }
 
-func TestHandleExtractionFailsMarksFailed(t *testing.T) {
+func TestSettleExtractionFailsMarksFailedAndCleansUp(t *testing.T) {
 	// Arrange
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
 	extractor := mocks.NewMockExtractor(ctrl)
 
-	stored := domain.File{ID: "abc", Key: "files/abc", Status: domain.StatusPending}
-	idx.EXPECT().Get(gomock.Any(), "abc").Return(stored, nil)
-	blobs.EXPECT().Get(gomock.Any(), "files/abc").Return([]byte("bytes"), "image/jpeg", nil)
+	content := []byte("the file bytes")
+	hash := hashOf(content)
+	staging := "uploads/upl-1"
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: staging, Status: domain.StatusPending}, nil)
+	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
+	blobs.EXPECT().Copy(gomock.Any(), staging, "files/"+hash).Return(nil)
 	extractor.EXPECT().Extract(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("model down"))
-
 	var saved domain.File
 	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
 		saved = f
 		return nil
 	})
+	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
+	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
 	h := ingest.New(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
 	// Act
-	err := h.Handle(context.Background(), s3Event("files/abc"))
+	err := h.Handle(context.Background(), s3Event(staging))
 
-	// Assert
+	// Assert: still settled under the hash, marked failed, staging cleaned up.
 	require.NoError(t, err)
+	assert.Equal(t, hash, saved.ID)
 	assert.Equal(t, domain.StatusFailed, saved.Status)
 }
 
-func TestHandleReadErrorIsReturned(t *testing.T) {
+func TestSettleReadErrorIsReturned(t *testing.T) {
 	// Arrange
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
-	extractor := mocks.NewMockExtractor(ctrl)
 
-	stored := domain.File{ID: "abc", Key: "files/abc"}
-	idx.EXPECT().Get(gomock.Any(), "abc").Return(stored, nil)
-	blobs.EXPECT().Get(gomock.Any(), "files/abc").Return(nil, "", errors.New("s3 down"))
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: "uploads/upl-1"}, nil)
+	blobs.EXPECT().Get(gomock.Any(), "uploads/upl-1").Return(nil, "", errors.New("s3 down"))
 
-	h := ingest.New(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+	h := ingest.New(idx, blobs, mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
 	// Act
-	err := h.Handle(context.Background(), s3Event("files/abc"))
+	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
+
+	// Assert
+	assert.Error(t, err)
+}
+
+func TestSettleMissingPendingIsReturned(t *testing.T) {
+	// Arrange
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{}, errors.New("not found"))
+
+	h := ingest.New(idx, mocks.NewMockStore(ctrl), mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+
+	// Act
+	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
 
 	// Assert
 	assert.Error(t, err)

@@ -35,8 +35,8 @@ const (
 	embedDimension   = 1024
 )
 
-// filesKeyPrefix is the S3 key namespace for blobs, matching blob.keyPrefix in the backend.
-const filesKeyPrefix = "files/"
+// stagingKeyPrefix is where fresh uploads land before ingest hashes them, matching blob.stagingPrefix.
+const stagingKeyPrefix = "uploads/"
 
 // NewVaultStack defines the S3 bucket, DynamoDB index and API Lambda.
 func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackProps) awscdk.Stack {
@@ -62,12 +62,20 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 			AllowedOrigins: allowedOrigins,
 			AllowedHeaders: jsii.Strings("*"),
 		}},
-		LifecycleRules: &[]*awss3.LifecycleRule{{
-			Transitions: &[]*awss3.Transition{{
-				StorageClass:    awss3.StorageClass_INTELLIGENT_TIERING(),
-				TransitionAfter: awscdk.Duration_Days(jsii.Number(0)),
-			}},
-		}},
+		LifecycleRules: &[]*awss3.LifecycleRule{
+			{
+				Transitions: &[]*awss3.Transition{{
+					StorageClass:    awss3.StorageClass_INTELLIGENT_TIERING(),
+					TransitionAfter: awscdk.Duration_Days(jsii.Number(0)),
+				}},
+			},
+			{
+				// Ingest copies each staged upload to its content-addressed key and deletes it; this
+				// expires any staging object a failed ingest left behind.
+				Prefix:     jsii.String(stagingKeyPrefix),
+				Expiration: awscdk.Duration_Days(jsii.Number(1)),
+			},
+		},
 	})
 
 	table := awsdynamodb.NewTableV2(stack, jsii.String("Index"), &awsdynamodb.TablePropsV2{
@@ -169,10 +177,12 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Resources: jsii.Strings(vectorArn, vectorArn+"/index/"+vectorIndexName),
 	}))
 
+	// Ingest fires on staged uploads only; the content-addressed copy under files/ must not
+	// re-trigger it, so the filter watches the staging prefix.
 	bucket.AddEventNotification(
 		awss3.EventType_OBJECT_CREATED,
 		awss3notifications.NewLambdaDestination(fn),
-		&awss3.NotificationKeyFilter{Prefix: jsii.String(filesKeyPrefix)},
+		&awss3.NotificationKeyFilter{Prefix: jsii.String(stagingKeyPrefix)},
 	)
 
 	api := awsapigatewayv2.NewHttpApi(stack, jsii.String("HttpApi"), &awsapigatewayv2.HttpApiProps{
