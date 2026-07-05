@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -42,17 +43,25 @@ func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentTy
 	if err != nil {
 		return nil, fmt.Errorf("parse metadata: %w", err)
 	}
-	return meta, nil
+
+	// Start from the file's own embedded metadata (EXIF, office core properties); the model's read
+	// of the content wins on any conflicting key.
+	result := embeddedMeta(content, contentType)
+	maps.Copy(result, meta)
+	return result, nil
 }
 
-// fileBlock wraps the bytes as the content block that fits the content type.
+// fileBlock wraps the bytes as the content block that fits the content type, decoding office
+// documents to text so the model reads their content instead of the raw zip.
 func fileBlock(content []byte, contentType string) anthropic.ContentBlockParamUnion {
-	encoded := base64.StdEncoding.EncodeToString(content)
 	switch {
 	case strings.HasPrefix(contentType, "image/"):
-		return anthropic.NewImageBlockBase64(contentType, encoded)
+		return anthropic.NewImageBlockBase64(contentType, base64.StdEncoding.EncodeToString(content))
 	case contentType == "application/pdf":
-		return anthropic.NewDocumentBlock(anthropic.Base64PDFSourceParam{Data: encoded})
+		return anthropic.NewDocumentBlock(anthropic.Base64PDFSourceParam{Data: base64.StdEncoding.EncodeToString(content)})
+	case isOffice(contentType):
+		text, _ := officeText(content)
+		return anthropic.NewTextBlock(text)
 	default:
 		return anthropic.NewTextBlock(string(content))
 	}
