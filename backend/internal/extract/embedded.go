@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/rwcarlsen/goexif/exif"
@@ -94,7 +95,7 @@ func parseCoreProps(file *zip.File) map[string]string {
 	defer func() { _ = rc.Close() }()
 
 	var props coreProperties
-	if err := xml.NewDecoder(rc).Decode(&props); err != nil {
+	if err := xml.NewDecoder(io.LimitReader(rc, maxPartBytes)).Decode(&props); err != nil {
 		return nil
 	}
 
