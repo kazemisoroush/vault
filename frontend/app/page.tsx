@@ -142,6 +142,7 @@ export default function Home() {
       <AskBox onAsk={onAsk} busy={asking} />
       {outcome !== null && (
         <>
+          {/* The answer's source is the first result: the model puts it first when it answers. */}
           {outcome.answer && <Answer answer={outcome.answer} source={outcome.results[0]?.file.name} />}
           <p className="eyebrow">{outcome.results.length === 1 ? "1 result" : `${outcome.results.length} results`}</p>
           <Results results={outcome.results} />

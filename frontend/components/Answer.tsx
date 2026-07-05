@@ -1,4 +1,4 @@
-// Answer shows the model's direct answer to the query, with the file it was drawn from.
+// Answer shows the model's direct answer to the query, with its source file.
 export function Answer({ answer, source }: { answer: string; source?: string }) {
   return (
     <div className="answer">

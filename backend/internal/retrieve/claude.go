@@ -14,7 +14,7 @@ import (
 const instruction = `You are a personal file vault assistant.
 You are given a JSON catalog of files (id, name, free-form meta, createdAt) and a request.
 Reply with ONLY a JSON object: {"answer": string, "ids": [string]}.
-- ids: the file ids that match, most relevant first; [] if none. Match on meaning and on time, for example "last month" against createdAt.
+- ids: the file ids that match, most relevant first; [] if none. Match on meaning and on time, for example "last month" against createdAt. When you give an answer, the id of the file it is drawn from must be first.
 - answer: a short, direct, human-readable answer to the request, drawn ONLY from the metadata shown. If the request is a plain find, or the metadata does not contain the answer, use "".
 No markdown, no commentary, only the JSON object.`
 

@@ -11,9 +11,9 @@ File bytes move through the presigned URLs the API hands out.
   The home both asks and drops: an ask box for natural-language retrieval on
   top, a drop surface below, and a trace of recent LLM calls at the bottom so
   the model's work is visible.
-- `components/`: the presentational pieces, an `AskBox` and `Results` for the
-  read side, a `DropZone` and `FileList` for the write side, a `Trace` for the
-  recent LLM calls, plus a `Wordmark` and a `ThemeToggle`.
+- `components/`: the presentational pieces, an `AskBox`, an `Answer`, and
+  `Results` for the read side, a `DropZone` and `FileList` for the write side, a
+  `Trace` for the recent LLM calls, plus a `Wordmark` and a `ThemeToggle`.
 - Theme: CSS custom-property tokens with a light and dark palette driven by a
   `data-theme` attribute, set before paint by a small script in the layout and
   flipped by the `ThemeToggle` (`lib/theme.ts` holds the storage key). Fonts are
@@ -25,7 +25,8 @@ File bytes move through the presigned URLs the API hands out.
 - `lib/auth/`: the Cognito boundary and the React auth context.
 - `lib/files/`: the file operations, `dropFile` (register then upload), the
   presigned `upload` PUT, `listFiles`, and `deleteFile`.
-- `lib/ask/`: the natural-language retrieval call, `ask`, over the typed client.
+- `lib/ask/`: the natural-language ask, `ask`, over the typed client; returns the
+  answer and the matched files.
 - `lib/calls/`: the recent LLM call trace, `listCalls`, over the typed client.
 
 ## Config

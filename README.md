@@ -26,7 +26,8 @@ retrieval, a calls endpoint for the recent LLM trace, plus a health check for li
 - Search is semantic: each file is embedded on drop and its vector stored in Amazon
   S3 Vectors, keyed by file id. An ask embeds the query, pulls the nearest files from
   S3 Vectors, and lets the model re-rank that shortlist, so cost stays constant as the
-  vault grows.
+  vault grows. The model also returns a short answer drawn from the matched files'
+  metadata (for example a passport number), with the source file it came from.
 - S3 objects transition to Intelligent-Tiering immediately, so storage cost drifts
   down on its own.
 - From milestone M2, an S3 event Lambda extracts free-form metadata from each dropped
