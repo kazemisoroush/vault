@@ -15,6 +15,7 @@ import type { AskResult } from "../lib/ask/askResult";
 import { useAuth } from "../lib/auth/context";
 import { listCalls } from "../lib/calls/listCalls";
 import type { LlmCall } from "../lib/calls/llmCall";
+import { deleteFile } from "../lib/files/deleteFile";
 import { dropFile } from "../lib/files/dropFile";
 import { listFiles } from "../lib/files/listFiles";
 import type { VaultFile } from "../lib/files/vaultFile";
@@ -81,6 +82,20 @@ export default function Home() {
     [api, refresh],
   );
 
+  const onDelete = useCallback(
+    async (id: string) => {
+      if (!api) return;
+      setError(null);
+      try {
+        await deleteFile(api, id);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "delete failed");
+      }
+    },
+    [api, refresh],
+  );
+
   const onAsk = useCallback(
     async (query: string) => {
       if (!api) return;
@@ -135,7 +150,7 @@ export default function Home() {
       <p className="eyebrow">Keep something new</p>
       <div className="panel">
         <DropZone onFile={onFile} busy={busy} />
-        <FileList files={files} />
+        <FileList files={files} onDelete={onDelete} />
       </div>
 
       <Trace calls={calls} />
