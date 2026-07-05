@@ -379,7 +379,7 @@ body {
   white-space: nowrap;
 }
 
-.files .trash {
+.files .rowicon {
   display: inline-grid;
   place-items: center;
   width: 28px;
@@ -392,19 +392,74 @@ body {
   opacity: 0;
 }
 
-.files li:hover .trash,
-.files .trash:focus-visible {
+.files li:hover .rowicon,
+.files .rowicon:focus-visible {
   opacity: 1;
 }
 
-.files .trash:hover {
+.files .rowicon:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.files .rowicon.trash:hover {
   color: var(--fail);
   background: var(--fail-soft);
 }
 
-.files .trash svg {
+.files .rowicon svg {
   width: 16px;
   height: 16px;
+}
+
+.rename {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.renameinput {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 9px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
+.renameinput:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.rename .save {
+  border: 1px solid var(--accent-strong);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.rename .save:hover {
+  background: var(--accent-strong);
+}
+
+.rename .link {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px;
+  cursor: pointer;
 }
 
 .rowactions {

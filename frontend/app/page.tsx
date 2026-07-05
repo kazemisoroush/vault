@@ -18,6 +18,7 @@ import type { LlmCall } from "../lib/calls/llmCall";
 import { deleteFile } from "../lib/files/deleteFile";
 import { dropFile } from "../lib/files/dropFile";
 import { listFiles } from "../lib/files/listFiles";
+import { updateFile } from "../lib/files/updateFile";
 import type { VaultFile } from "../lib/files/vaultFile";
 
 const pollInterval = 3000;
@@ -96,6 +97,20 @@ export default function Home() {
     [api, refresh],
   );
 
+  const onRename = useCallback(
+    async (id: string, name: string) => {
+      if (!api) return;
+      setError(null);
+      try {
+        await updateFile(api, id, name);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "rename failed");
+      }
+    },
+    [api, refresh],
+  );
+
   const onAsk = useCallback(
     async (query: string) => {
       if (!api) return;
@@ -150,7 +165,7 @@ export default function Home() {
       <p className="eyebrow">Keep something new</p>
       <div className="panel">
         <DropZone onFile={onFile} busy={busy} />
-        <FileList files={files} onDelete={onDelete} />
+        <FileList files={files} onDelete={onDelete} onRename={onRename} />
       </div>
 
       <Trace calls={calls} />

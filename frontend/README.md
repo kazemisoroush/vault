@@ -24,7 +24,7 @@ File bytes move through the presigned URLs the API hands out.
   `openapi.yaml`, and `client.ts` wraps it and attaches the bearer token.
 - `lib/auth/`: the Cognito boundary and the React auth context.
 - `lib/files/`: the file operations, `dropFile` (register then upload), the
-  presigned `upload` PUT, `listFiles`, and `deleteFile`.
+  presigned `upload` PUT, `listFiles`, `deleteFile`, and `updateFile`.
 - `lib/ask/`: the natural-language retrieval call, `ask`, over the typed client.
 - `lib/calls/`: the recent LLM call trace, `listCalls`, over the typed client.
 
