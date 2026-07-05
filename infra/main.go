@@ -164,7 +164,6 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Actions: jsii.Strings(
 			"s3vectors:PutVectors",
 			"s3vectors:QueryVectors",
-			"s3vectors:GetVectors",
 			"s3vectors:DeleteVectors",
 		),
 		Resources: jsii.Strings(vectorArn, vectorArn+"/index/"+vectorIndexName),
