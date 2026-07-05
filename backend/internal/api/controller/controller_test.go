@@ -23,19 +23,26 @@ func mockDeps(t *testing.T) (*mocks.MockIndex, *mocks.MockStore, *mocks.MockVect
 	return mocks.NewMockIndex(ctrl), mocks.NewMockStore(ctrl), mocks.NewMockVectorStore(ctrl)
 }
 
+// dropHash is a valid SHA-256 hex content id for the drop tests.
+var dropHash = strings.Repeat("a", 64)
+
+func dropBody(hash string) string {
+	return `{"name":"petrol.jpg","contentType":"image/jpeg","size":123,"hash":"` + hash + `"}`
+}
+
 func TestDropCreatesPendingRecordKeyedByHash(t *testing.T) {
 	// Arrange
 	idx, blobs, store := mockDeps(t)
 	c := NewFileController(idx, blobs, store)
 	c.now = func() time.Time { return time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC) }
-	idx.EXPECT().Get(gomock.Any(), "sha256hex").Return(domain.File{}, index.ErrNotFound)
-	blobs.EXPECT().PresignPut(gomock.Any(), "files/sha256hex", "image/jpeg", presignExpiry).Return("https://upload", nil)
+	idx.EXPECT().Get(gomock.Any(), dropHash).Return(domain.File{}, index.ErrNotFound)
+	blobs.EXPECT().PresignPut(gomock.Any(), "files/"+dropHash, "image/jpeg", presignExpiry).Return("https://upload", nil)
 	var saved domain.File
 	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
 		saved = f
 		return nil
 	})
-	req := httptest.NewRequest(http.MethodPost, "/files", strings.NewReader(`{"name":"petrol.jpg","contentType":"image/jpeg","size":123,"hash":"sha256hex"}`))
+	req := httptest.NewRequest(http.MethodPost, "/files", strings.NewReader(dropBody(dropHash)))
 	rec := httptest.NewRecorder()
 
 	// Act
@@ -44,18 +51,17 @@ func TestDropCreatesPendingRecordKeyedByHash(t *testing.T) {
 	// Assert: the id and key are the content hash.
 	require.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, domain.StatusPending, saved.Status)
-	assert.Equal(t, "files/sha256hex", saved.Key)
+	assert.Equal(t, "files/"+dropHash, saved.Key)
 	assert.Contains(t, rec.Body.String(), `"uploadUrl":"https://upload"`)
-	assert.Contains(t, rec.Body.String(), `"id":"sha256hex"`)
+	assert.Contains(t, rec.Body.String(), `"id":"`+dropHash+`"`)
 }
 
-func TestDropDeduplicatesOnHash(t *testing.T) {
-	// Arrange: the same bytes were dropped before, so the record already exists.
+func TestDropDeduplicatesReadyFile(t *testing.T) {
+	// Arrange: the same bytes are already stored and ready, so this is a duplicate.
 	idx, blobs, store := mockDeps(t)
 	c := NewFileController(idx, blobs, store)
-	existing := domain.File{ID: "sha256hex", Name: "petrol.jpg", Status: domain.StatusReady}
-	idx.EXPECT().Get(gomock.Any(), "sha256hex").Return(existing, nil)
-	req := httptest.NewRequest(http.MethodPost, "/files", strings.NewReader(`{"name":"petrol.jpg","contentType":"image/jpeg","size":123,"hash":"sha256hex"}`))
+	idx.EXPECT().Get(gomock.Any(), dropHash).Return(domain.File{ID: dropHash, Status: domain.StatusReady}, nil)
+	req := httptest.NewRequest(http.MethodPost, "/files", strings.NewReader(dropBody(dropHash)))
 	rec := httptest.NewRecorder()
 
 	// Act
@@ -64,7 +70,25 @@ func TestDropDeduplicatesOnHash(t *testing.T) {
 	// Assert: existing record returned, no upload URL, no new write (no PresignPut/Put expected).
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "uploadUrl")
-	assert.Contains(t, rec.Body.String(), `"id":"sha256hex"`)
+	assert.Contains(t, rec.Body.String(), `"id":"`+dropHash+`"`)
+}
+
+func TestDropRetriesUnfinishedUpload(t *testing.T) {
+	// Arrange: a prior drop registered but never finished uploading, so retry re-issues an upload.
+	idx, blobs, store := mockDeps(t)
+	c := NewFileController(idx, blobs, store)
+	idx.EXPECT().Get(gomock.Any(), dropHash).Return(domain.File{ID: dropHash, Status: domain.StatusPending}, nil)
+	blobs.EXPECT().PresignPut(gomock.Any(), "files/"+dropHash, "image/jpeg", presignExpiry).Return("https://upload", nil)
+	idx.EXPECT().Put(gomock.Any(), gomock.Any()).Return(nil)
+	req := httptest.NewRequest(http.MethodPost, "/files", strings.NewReader(dropBody(dropHash)))
+	rec := httptest.NewRecorder()
+
+	// Act
+	c.Drop(rec, req)
+
+	// Assert
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"uploadUrl":"https://upload"`)
 }
 
 func TestDropRejectsMissingFields(t *testing.T) {
@@ -75,6 +99,20 @@ func TestDropRejectsMissingFields(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Act: no hash.
+	c.Drop(rec, req)
+
+	// Assert
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestDropRejectsMalformedHash(t *testing.T) {
+	// Arrange
+	idx, blobs, store := mockDeps(t)
+	c := NewFileController(idx, blobs, store)
+	req := httptest.NewRequest(http.MethodPost, "/files", strings.NewReader(dropBody("../not-a-hash")))
+	rec := httptest.NewRecorder()
+
+	// Act
 	c.Drop(rec, req)
 
 	// Assert

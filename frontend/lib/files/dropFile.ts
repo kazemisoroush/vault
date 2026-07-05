@@ -3,8 +3,8 @@ import type { ContentHasher } from "./contentHasher";
 import { uploadBytes } from "./upload";
 import type { VaultFile } from "./vaultFile";
 
-// dropFile hashes the file's content, registers it (the hash is its id, so an identical file is a
-// no-op), then uploads the bytes only when the file is new. The extractor fills the metadata later.
+// dropFile hashes the content, registers it (an identical file is a no-op), then uploads the bytes
+// only when the file is new.
 export async function dropFile(api: ApiClient, file: File, hasher: ContentHasher): Promise<VaultFile> {
   const contentType = file.type || "application/octet-stream";
   const hash = await hasher.hash(file);

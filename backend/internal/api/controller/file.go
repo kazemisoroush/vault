@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
+
+// contentHashPattern matches a SHA-256 hex string, the shape of a content id and its S3 key.
+var contentHashPattern = regexp.MustCompile("^[0-9a-f]{64}$")
 
 // FileController serves the five CRUD verbs over file records and their blobs.
 type FileController struct {
@@ -27,7 +31,7 @@ func NewFileController(idx index.Index, blobs blob.Store, store vectors.Store) *
 	return &FileController{index: idx, blobs: blobs, vectors: store, now: time.Now}
 }
 
-// dropRequest is the body of a POST /files call. Hash is the content hash that identifies the file.
+// dropRequest is a POST /files body, identified by its content Hash.
 type dropRequest struct {
 	Name        string            `json:"name"`
 	ContentType string            `json:"contentType"`
@@ -36,7 +40,7 @@ type dropRequest struct {
 	Meta        map[string]string `json:"meta"`
 }
 
-// dropResponse is the body returned by a POST /files call. UploadURL is absent for a duplicate.
+// dropResponse is a POST /files body, with no UploadURL for a duplicate.
 type dropResponse struct {
 	File      domain.File `json:"file"`
 	UploadURL string      `json:"uploadUrl,omitempty"`
@@ -53,16 +57,21 @@ func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name, contentType and hash are required")
 		return
 	}
-
-	// The content hash is the file id, so the same bytes always map to one record. If it already
-	// exists, this is a duplicate drop: return the existing file and no upload URL.
-	existing, err := c.index.Get(r.Context(), req.Hash)
-	if err == nil {
-		writeJSON(w, http.StatusOK, dropResponse{File: existing})
+	if !contentHashPattern.MatchString(req.Hash) {
+		writeError(w, http.StatusBadRequest, "hash must be a SHA-256 hex string")
 		return
 	}
-	if !errors.Is(err, index.ErrNotFound) {
+
+	// The content hash is the file id. If the same bytes are already stored (a ready record) this is
+	// a duplicate: return it with no upload URL. A record that never finished uploading (pending or
+	// failed) falls through so the drop can be retried.
+	existing, err := c.index.Get(r.Context(), req.Hash)
+	if err != nil && !errors.Is(err, index.ErrNotFound) {
 		writeError(w, http.StatusInternalServerError, "could not check the vault")
+		return
+	}
+	if err == nil && existing.Status == domain.StatusReady {
+		writeJSON(w, http.StatusOK, dropResponse{File: existing})
 		return
 	}
 

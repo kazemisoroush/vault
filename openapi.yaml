@@ -179,7 +179,7 @@ components:
         size: { type: integer, format: int64 }
         hash:
           type: string
-          description: The content hash (SHA-256 hex) that identifies the file; the same bytes always hash the same.
+          description: The content hash (SHA-256 hex) that identifies the file.
         meta:
           type: object
           additionalProperties: { type: string }
@@ -190,7 +190,7 @@ components:
         file: { $ref: '#/components/schemas/File' }
         uploadUrl:
           type: string
-          description: Presigned PUT for the bytes; absent when the file already exists (a duplicate drop).
+          description: Presigned PUT for the bytes, absent when the file is already stored.
     GetFileResponse:
       type: object
       required: [file, downloadUrl]
