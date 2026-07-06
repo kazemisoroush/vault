@@ -5,13 +5,15 @@ import (
 	"strings"
 )
 
+//go:generate go tool mockgen -source=probe.go -destination=../mocks/probe_mock.go -package=mocks
+
 // Probe reads embedded metadata from the bytes of the content types it supports.
 type Probe interface {
 	Supports(contentType string) bool
 	Probe(content []byte) map[string]string
 }
 
-// probes is the set of embedded-metadata readers; support a new file type by adding a Probe here.
+// probes lists the embedded-metadata readers, one per file type, and is the only place a type is registered.
 var probes = []Probe{exifProbe{}, officeProbe{}, pdfProbe{}}
 
 // embeddedMeta returns best-effort metadata from the file's own bytes, gathered from every probe

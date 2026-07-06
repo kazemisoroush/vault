@@ -15,7 +15,7 @@ func (pdfProbe) Supports(contentType string) bool {
 	return contentType == "application/pdf"
 }
 
-// Probe returns the PDF's /Info metadata (author, title, dates), recovering if the parser panics.
+// Probe returns the PDF's /Info metadata (author, title, subject, dates), recovering if the parser panics.
 func (pdfProbe) Probe(content []byte) (meta map[string]string) {
 	meta = map[string]string{}
 	defer func() {
