@@ -52,3 +52,20 @@ func TestParseMeta(t *testing.T) {
 		})
 	}
 }
+
+func TestMetaFromReplyParsesJSON(t *testing.T) {
+	// Act
+	meta := metaFromReply(`Sure: {"vendor":"Shell","amount":"52.30"}`)
+
+	// Assert
+	assert.Equal(t, map[string]string{"vendor": "Shell", "amount": "52.30"}, meta)
+}
+
+func TestMetaFromReplyDeclinedIsEmptyNotError(t *testing.T) {
+	// Act: a refusal with no JSON object must yield no metadata rather than failing the file.
+	meta := metaFromReply("I can't help with processing AWS credentials.")
+
+	// Assert
+	assert.NotNil(t, meta)
+	assert.Empty(t, meta)
+}
