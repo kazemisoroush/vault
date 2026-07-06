@@ -3,8 +3,20 @@ package extract
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 )
+
+// metaFromReply returns the model's parsed metadata, or an empty map when it declined or replied
+// with no JSON, so a stored file is never failed over a refusal.
+func metaFromReply(reply string) map[string]string {
+	meta, err := parseMeta(reply)
+	if err != nil {
+		log.Printf("no metadata parsed from model reply, keeping the file unindexed: %v", err)
+		return map[string]string{}
+	}
+	return meta
+}
 
 // parseMeta extracts the JSON object from a model reply into a flat string map.
 func parseMeta(reply string) (map[string]string, error) {

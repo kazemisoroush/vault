@@ -39,14 +39,9 @@ func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentTy
 		return nil, fmt.Errorf("bedrock extract: %w", err)
 	}
 
-	meta, err := parseMeta(reply)
-	if err != nil {
-		return nil, fmt.Errorf("parse metadata: %w", err)
-	}
-
-	// The model's extraction wins over the file's own embedded metadata on any conflicting key.
+	// Merge the model's metadata over the file's own embedded metadata, treating a declined reply as none.
 	result := embeddedMeta(content, contentType)
-	maps.Copy(result, meta)
+	maps.Copy(result, metaFromReply(reply))
 	return result, nil
 }
 
