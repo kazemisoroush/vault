@@ -33,7 +33,7 @@ func (e *EMFEmitter) Emit(namespace string, dimensions map[string]string, metric
 
 	definitions := make([]map[string]string, 0, len(metrics))
 	for _, metric := range metrics {
-		definitions = append(definitions, map[string]string{"Name": metric.Name, "Unit": metric.Unit})
+		definitions = append(definitions, map[string]string{"Name": metric.Name, "Unit": string(metric.Unit)})
 	}
 
 	record := map[string]any{

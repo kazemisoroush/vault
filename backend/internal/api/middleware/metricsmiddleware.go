@@ -26,20 +26,35 @@ func (m *MetricsMiddleware) Wrap(next http.Handler) http.Handler {
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)
 
-		m.emitter.Emit("Vault",
-			map[string]string{"Route": route(r), "Method": r.Method, "Status": statusClass(recorder.status)},
-			telemetry.Metric{Name: "RequestCount", Value: 1, Unit: "Count"},
-			telemetry.Metric{Name: "RequestDurationMs", Value: float64(m.now().Sub(start).Milliseconds()), Unit: "Milliseconds"},
+		m.emitter.Emit(telemetry.Namespace,
+			map[string]string{"Route": route(r), "Method": methodLabel(r.Method), "Status": statusClass(recorder.status)},
+			telemetry.Metric{Name: "RequestCount", Value: 1, Unit: telemetry.Count},
+			telemetry.Metric{Name: "RequestDurationMs", Value: float64(m.now().Sub(start).Milliseconds()), Unit: telemetry.Milliseconds},
 		)
 	})
 }
 
-// route returns the matched route pattern, or the method and path when no route matched (for example a 401).
+// knownMethods bounds the Method dimension so an arbitrary request method cannot inflate cardinality.
+var knownMethods = map[string]bool{
+	http.MethodGet: true, http.MethodHead: true, http.MethodPost: true, http.MethodPut: true,
+	http.MethodPatch: true, http.MethodDelete: true, http.MethodOptions: true,
+	http.MethodConnect: true, http.MethodTrace: true,
+}
+
+// route returns the matched route pattern, or "unmatched" so an arbitrary path cannot inflate cardinality.
 func route(r *http.Request) string {
 	if r.Pattern != "" {
 		return r.Pattern
 	}
-	return r.Method + " " + r.URL.Path
+	return "unmatched"
+}
+
+// methodLabel returns the request method when it is a known HTTP method, else "other".
+func methodLabel(method string) string {
+	if knownMethods[method] {
+		return method
+	}
+	return "other"
 }
 
 // statusClass buckets a status into its class (2xx, 4xx, ...) to keep metric cardinality low.

@@ -22,7 +22,7 @@ func NewMetricsController(emitter telemetry.Emitter) *MetricsController {
 
 // timeToFileRequest is the body of a POST /metrics/time-to-file call.
 type timeToFileRequest struct {
-	MS float64 `json:"ms"`
+	Ms float64 `json:"ms"`
 }
 
 // TimeToFile records the client-measured milliseconds from asking to opening a file.
@@ -32,12 +32,12 @@ func (c *MetricsController) TimeToFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if req.MS < 0 || req.MS > maxTimeToFileMs {
+	if req.Ms < 0 || req.Ms > maxTimeToFileMs {
 		writeError(w, http.StatusBadRequest, "ms must be between 0 and 600000")
 		return
 	}
 
-	c.emitter.Emit("Vault", map[string]string{"Source": "web"},
-		telemetry.Metric{Name: "TimeToFileMs", Value: req.MS, Unit: "Milliseconds"})
+	c.emitter.Emit(telemetry.Namespace, map[string]string{"Source": "web"},
+		telemetry.Metric{Name: "TimeToFileMs", Value: req.Ms, Unit: telemetry.Milliseconds})
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -33,6 +33,9 @@ retrieval, a calls endpoint for the recent LLM trace, plus a health check for li
 - From milestone M2, an S3 event Lambda extracts free-form metadata from each dropped
   file with an LLM (office documents are decoded to text first), and also captures the
   file's own embedded metadata: image EXIF, office properties, and PDF document properties.
+- Observability is CloudWatch native: a middleware emits RED metrics (request rate,
+  errors, duration) per route as EMF, and the frontend reports time-to-file to
+  POST /metrics/time-to-file, the one metric tracked across the dogfood.
 
 ## Commands
 

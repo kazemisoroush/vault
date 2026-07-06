@@ -67,17 +67,31 @@ func TestMetricsMiddlewareRecordsErrorClass(t *testing.T) {
 	assert.Equal(t, "POST /files", emitter.dimensions["Route"])
 }
 
-func TestMetricsMiddlewareFallsBackWhenNoRouteMatched(t *testing.T) {
+func TestMetricsMiddlewareBoundsUnmatchedRoute(t *testing.T) {
 	// Arrange: no mux, so the request has no matched pattern (as with an auth rejection).
 	emitter := &captureEmitter{}
 	handler := middleware.NewMetricsMiddleware(emitter).Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 
-	// Act
-	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/files", nil))
+	// Act: an arbitrary path that must not become its own metric dimension.
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/anything/attacker/controlled", nil))
 
 	// Assert
-	assert.Equal(t, "GET /files", emitter.dimensions["Route"])
+	assert.Equal(t, "unmatched", emitter.dimensions["Route"])
 	assert.Equal(t, "4xx", emitter.dimensions["Status"])
+}
+
+func TestMetricsMiddlewareBoundsUnknownMethod(t *testing.T) {
+	// Arrange
+	emitter := &captureEmitter{}
+	handler := middleware.NewMetricsMiddleware(emitter).Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Act
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("BREW", "/", nil))
+
+	// Assert
+	assert.Equal(t, "other", emitter.dimensions["Method"])
 }
