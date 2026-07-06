@@ -7,12 +7,11 @@ import (
 	"strings"
 )
 
-// metaFromReply returns the model's parsed metadata, or an empty map when it declined or replied
-// with no JSON, so a stored file is never failed over a refusal.
+// metaFromReply returns the model's parsed metadata, or an empty map when the model declined.
 func metaFromReply(reply string) map[string]string {
 	meta, err := parseMeta(reply)
 	if err != nil {
-		log.Printf("no metadata parsed from model reply, keeping the file unindexed: %v", err)
+		log.Printf("extraction produced no metadata (the model may have declined): %v", err)
 		return map[string]string{}
 	}
 	return meta
