@@ -131,6 +131,21 @@ paths:
                 $ref: '#/components/schemas/CallsResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /metrics/time-to-file:
+    post:
+      operationId: reportTimeToFile
+      summary: Report the client-measured time from asking to opening a file.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimeToFileRequest'
+      responses:
+        '204':
+          description: Metric recorded.
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /health:
     get:
       operationId: health
@@ -212,6 +227,11 @@ components:
       required: [query]
       properties:
         query: { type: string }
+    TimeToFileRequest:
+      type: object
+      required: [ms]
+      properties:
+        ms: { type: number, minimum: 0, maximum: 600000 }
     AskResult:
       type: object
       required: [file, downloadUrl]

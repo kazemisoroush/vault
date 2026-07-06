@@ -15,23 +15,26 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/retrieve"
+	"github.com/kazemisoroush/vault/backend/internal/telemetry"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 // New builds the API handler: controllers behind the router, wrapped in middleware.
-func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, embedder embed.Embedder, store vectors.Store, retriever retrieve.Retriever, calls controller.CallLister) (http.Handler, error) {
+func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, embedder embed.Embedder, store vectors.Store, retriever retrieve.Retriever, calls controller.CallLister, emitter telemetry.Emitter) (http.Handler, error) {
 	router := NewRouter(
 		controller.NewFileController(idx, blobs, store),
 		controller.NewAskController(idx, blobs, embedder, store, retriever),
 		controller.NewCallsController(calls),
 		controller.NewHealthController(),
+		controller.NewMetricsController(emitter),
 	)
 
 	authed, err := authenticate(ctx, cfg, router)
 	if err != nil {
 		return nil, fmt.Errorf("configure authentication: %w", err)
 	}
-	return middleware.NewRecoverMiddleware().Wrap(authed), nil
+	// Metrics wraps outermost so it records every request, including auth rejections and recovered panics.
+	return middleware.NewMetricsMiddleware(emitter).Wrap(middleware.NewRecoverMiddleware().Wrap(authed)), nil
 }
 
 // authenticate wraps the router with JWT auth, failing closed unless opted out.

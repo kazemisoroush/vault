@@ -20,6 +20,7 @@ import { deleteFile } from "../lib/files/deleteFile";
 import { dropFile } from "../lib/files/dropFile";
 import { listFiles } from "../lib/files/listFiles";
 import type { VaultFile } from "../lib/files/vaultFile";
+import { reportTimeToFile } from "../lib/metrics/reportTimeToFile";
 
 const pollInterval = 3000;
 
@@ -103,7 +104,10 @@ export default function Home() {
       setAsking(true);
       setError(null);
       try {
+        // Time-to-file: from the phrase submitted to the results shown, reported as the one metric.
+        const start = performance.now();
         setOutcome(await ask(api, query));
+        void reportTimeToFile(api, performance.now() - start);
         await refreshCalls();
       } catch (err) {
         setError(err instanceof Error ? err.message : "search failed");

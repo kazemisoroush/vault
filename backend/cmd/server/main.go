@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -17,6 +18,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/retrieve"
+	"github.com/kazemisoroush/vault/backend/internal/telemetry"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
@@ -48,7 +50,7 @@ func main() {
 		log.Fatalf("configure retriever: %v", err)
 	}
 
-	apiHandler, err := api.New(ctx, cfg, idx, blobs, embedder, vectorStore, retriever, recorder)
+	apiHandler, err := api.New(ctx, cfg, idx, blobs, embedder, vectorStore, retriever, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/api"
 	"github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
+	"github.com/kazemisoroush/vault/backend/internal/telemetry"
 )
 
 func TestNewFailsClosedWhenAuthNotConfigured(t *testing.T) {
@@ -26,7 +27,7 @@ func TestNewFailsClosedWhenAuthNotConfigured(t *testing.T) {
 	callLister := mocks.NewMockCallLister(ctrl)
 
 	// Act
-	_, err := api.New(context.Background(), config.Config{}, idx, blobs, embedder, vectorStore, retriever, callLister)
+	_, err := api.New(context.Background(), config.Config{}, idx, blobs, embedder, vectorStore, retriever, callLister, telemetry.NoopEmitter{})
 
 	// Assert
 	assert.Error(t, err)
@@ -44,7 +45,7 @@ func TestNewAuthDisabledServesDataRoute(t *testing.T) {
 	idx.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", nil)
 
 	// Act
-	handler, err := api.New(context.Background(), config.Config{AuthDisabled: true}, idx, blobs, embedder, vectorStore, retriever, callLister)
+	handler, err := api.New(context.Background(), config.Config{AuthDisabled: true}, idx, blobs, embedder, vectorStore, retriever, callLister, telemetry.NoopEmitter{})
 	require.NoError(t, err)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/files", nil))
