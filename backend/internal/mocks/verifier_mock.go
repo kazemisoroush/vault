@@ -40,11 +40,12 @@ func (m *MockTokenVerifier) EXPECT() *MockTokenVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockTokenVerifier) Verify(token string) error {
+func (m *MockTokenVerifier) Verify(token string) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", token)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Verify indicates an expected call of Verify.

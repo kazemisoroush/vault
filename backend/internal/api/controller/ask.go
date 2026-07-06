@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kazemisoroush/vault/backend/internal/auth"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/embed"
@@ -101,11 +102,13 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 }
 
 // load fetches the records for the nearest ids, skipping any whose record has since gone.
+// load fetches the shortlisted records, keeping only the ones the caller owns.
 func (c *AskController) load(ctx context.Context, ids []string) []domain.File {
+	owner := auth.Owner(ctx)
 	files := make([]domain.File, 0, len(ids))
 	for _, id := range ids {
 		file, err := c.index.Get(ctx, id)
-		if err != nil {
+		if err != nil || file.Owner != owner {
 			continue
 		}
 		files = append(files, file)

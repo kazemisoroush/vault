@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/kazemisoroush/vault/backend/internal/auth"
 )
 
 const bearerPrefix = "Bearer "
@@ -31,12 +33,13 @@ func (m *AuthMiddleware) Wrap(next http.Handler) http.Handler {
 			unauthorized(w, "missing bearer token")
 			return
 		}
-		if err := m.verifier.Verify(token); err != nil {
+		owner, err := m.verifier.Verify(token)
+		if err != nil {
 			unauthorized(w, "invalid token")
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(auth.WithOwner(r.Context(), owner)))
 	})
 }
 

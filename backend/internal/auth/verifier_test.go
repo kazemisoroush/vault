@@ -14,6 +14,7 @@ import (
 const (
 	testIssuer   = "https://cognito-idp.us-east-1.amazonaws.com/pool-1"
 	testClientID = "client-abc"
+	testSubject  = "user-sub-123"
 )
 
 // sign builds a signed token string from the given claims and key.
@@ -33,6 +34,7 @@ func validClaims() Claims {
 		Username: "soroush",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    testIssuer,
+			Subject:   testSubject,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
 	}
@@ -94,6 +96,15 @@ func TestVerify(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "no subject",
+			token: sign(t, key, func() Claims {
+				c := validClaims()
+				c.Subject = ""
+				return c
+			}()),
+			wantErr: true,
+		},
+		{
 			name:    "signed by an unknown key",
 			token:   sign(t, otherKey, validClaims()),
 			wantErr: true,
@@ -108,13 +119,14 @@ func TestVerify(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Act
-			err := verifier.Verify(tc.token)
+			owner, err := verifier.Verify(tc.token)
 
 			// Assert
 			if tc.wantErr {
 				assert.ErrorIs(t, err, ErrUnauthorized)
 			} else {
 				assert.NoError(t, err)
+				assert.Equal(t, testSubject, owner)
 			}
 		})
 	}

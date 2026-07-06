@@ -10,13 +10,15 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/kazemisoroush/vault/backend/internal/api/middleware"
+	"github.com/kazemisoroush/vault/backend/internal/auth"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
-// okNext records that the downstream handler was reached.
-func okNext(reached *bool) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+// okNext records that the downstream handler was reached and the owner it saw in context.
+func okNext(reached *bool, owner *string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		*reached = true
+		*owner = auth.Owner(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 }
@@ -44,10 +46,11 @@ func TestRequireAuth(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			verifier := mocks.NewMockTokenVerifier(ctrl)
 			if tc.expectCall {
-				verifier.EXPECT().Verify(gomock.Any()).Return(tc.verifyErr)
+				verifier.EXPECT().Verify(gomock.Any()).Return("owner-x", tc.verifyErr)
 			}
 			reached := false
-			mw := middleware.NewAuthMiddleware(verifier).Wrap(okNext(&reached))
+			owner := ""
+			mw := middleware.NewAuthMiddleware(verifier).Wrap(okNext(&reached, &owner))
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			if tc.authHeader != "" {
 				req.Header.Set("Authorization", tc.authHeader)
@@ -60,6 +63,9 @@ func TestRequireAuth(t *testing.T) {
 			// Assert
 			assert.Equal(t, tc.wantStatus, rec.Code)
 			assert.Equal(t, tc.wantNext, reached)
+			if tc.wantNext && tc.expectCall {
+				assert.Equal(t, "owner-x", owner)
+			}
 		})
 	}
 }

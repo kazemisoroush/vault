@@ -42,7 +42,7 @@ func main() {
 
 	total := 0
 	for cursor := ""; ; {
-		files, next, err := idx.List(ctx, pageSize, cursor)
+		files, next, err := idx.List(ctx, "", pageSize, cursor)
 		if err != nil {
 			log.Fatalf("list files: %v", err)
 		}

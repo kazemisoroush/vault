@@ -42,7 +42,7 @@ func TestNewAuthDisabledServesDataRoute(t *testing.T) {
 	embedder := mocks.NewMockEmbedder(ctrl)
 	vectorStore := mocks.NewMockVectorStore(ctrl)
 	callLister := mocks.NewMockCallLister(ctrl)
-	idx.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", nil)
+	idx.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", nil)
 
 	// Act
 	handler, err := api.New(context.Background(), config.Config{AuthDisabled: true}, idx, blobs, embedder, vectorStore, retriever, callLister, telemetry.NoopEmitter{})
