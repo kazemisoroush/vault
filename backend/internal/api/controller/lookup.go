@@ -9,8 +9,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/index"
 )
 
-// lookup loads the caller's file named by the path id, writing the error response on failure. A
-// record owned by someone else is reported as not found, so ownership never leaks a file's existence.
+// lookup loads the caller's file named by the path id, reporting another owner's record as not found.
 func lookup(w http.ResponseWriter, r *http.Request, idx index.Index) (domain.File, bool) {
 	file, err := idx.Get(r.Context(), r.PathValue("id"))
 	if err != nil {

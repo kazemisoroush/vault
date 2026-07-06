@@ -101,7 +101,6 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, askResponse{Answer: answer.Text, Results: results})
 }
 
-// load fetches the records for the nearest ids, skipping any whose record has since gone.
 // load fetches the shortlisted records, keeping only the ones the caller owns.
 func (c *AskController) load(ctx context.Context, ids []string) []domain.File {
 	owner := auth.Owner(ctx)
