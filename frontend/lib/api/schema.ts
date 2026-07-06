@@ -77,6 +77,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metrics/time-to-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report the client-measured time from asking to opening a file. */
+        post: operations["reportTimeToFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -147,6 +164,9 @@ export interface components {
         };
         AskRequest: {
             query: string;
+        };
+        TimeToFileRequest: {
+            ms: number;
         };
         AskResult: {
             file: components["schemas"]["File"];
@@ -372,6 +392,29 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CallsResponse"];
                 };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    reportTimeToFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeToFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Metric recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["BadRequest"];
         };
