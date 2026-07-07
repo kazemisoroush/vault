@@ -24,14 +24,14 @@ func (f *fakeClient) PutVectors(_ context.Context, in *s3vectors.PutVectorsInput
 	f.putKey = *in.Vectors[0].Key
 	meta := map[string]string{}
 	_ = in.Vectors[0].Metadata.UnmarshalSmithyDocument(&meta)
-	f.putOwner = meta["owner"]
+	f.putOwner = meta["ownerId"]
 	return &s3vectors.PutVectorsOutput{}, nil
 }
 
 func (f *fakeClient) QueryVectors(_ context.Context, in *s3vectors.QueryVectorsInput, _ ...func(*s3vectors.Options)) (*s3vectors.QueryVectorsOutput, error) {
 	filter := map[string]string{}
 	_ = in.Filter.UnmarshalSmithyDocument(&filter)
-	f.queryOwner = filter["owner"]
+	f.queryOwner = filter["ownerId"]
 	vectors := make([]types.QueryOutputVector, 0, len(f.queryKeys))
 	for _, key := range f.queryKeys {
 		vectors = append(vectors, types.QueryOutputVector{Key: aws.String(key)})

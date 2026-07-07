@@ -20,7 +20,7 @@ func lookup(w http.ResponseWriter, r *http.Request, idx index.Index) (domain.Fil
 		writeError(w, http.StatusInternalServerError, "could not read file record")
 		return domain.File{}, false
 	}
-	if file.Owner != auth.Owner(r.Context()) {
+	if file.OwnerID != auth.OwnerID(r.Context()) {
 		writeError(w, http.StatusNotFound, "file not found")
 		return domain.File{}, false
 	}

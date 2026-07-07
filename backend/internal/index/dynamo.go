@@ -69,13 +69,12 @@ func (d *DynamoIndex) Get(ctx context.Context, id string) (domain.File, error) {
 
 // List returns one page of file records and the cursor for the next page.
 // List returns one page of the owner's records.
-func (d *DynamoIndex) List(ctx context.Context, owner string, limit int32, cursor string) ([]domain.File, string, error) {
+func (d *DynamoIndex) List(ctx context.Context, ownerID string, limit int32, cursor string) ([]domain.File, string, error) {
 	input := &dynamodb.ScanInput{
 		TableName:                 aws.String(d.table),
 		Limit:                     aws.Int32(limit),
-		FilterExpression:          aws.String("#owner = :owner"),
-		ExpressionAttributeNames:  map[string]string{"#owner": "owner"},
-		ExpressionAttributeValues: map[string]types.AttributeValue{":owner": &types.AttributeValueMemberS{Value: owner}},
+		FilterExpression:          aws.String("ownerId = :ownerId"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{":ownerId": &types.AttributeValueMemberS{Value: ownerID}},
 	}
 	if cursor != "" {
 		id, err := decodeCursor(cursor)

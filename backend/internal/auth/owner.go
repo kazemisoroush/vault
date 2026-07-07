@@ -2,16 +2,16 @@ package auth
 
 import "context"
 
-// ownerContextKey is the private key the authenticated owner is stored under.
-type ownerContextKey struct{}
+// ownerIDContextKey is the private key the authenticated owner id is stored under.
+type ownerIDContextKey struct{}
 
-// WithOwner returns a context carrying the authenticated owner, the caller's Cognito sub.
-func WithOwner(ctx context.Context, owner string) context.Context {
-	return context.WithValue(ctx, ownerContextKey{}, owner)
+// WithOwnerID returns a context carrying the authenticated owner id, the caller's Cognito sub.
+func WithOwnerID(ctx context.Context, ownerID string) context.Context {
+	return context.WithValue(ctx, ownerIDContextKey{}, ownerID)
 }
 
-// Owner returns the authenticated owner from the context, or an empty string when there is none.
-func Owner(ctx context.Context) string {
-	owner, _ := ctx.Value(ownerContextKey{}).(string)
-	return owner
+// OwnerID returns the authenticated owner id from the context, or an empty string when there is none.
+func OwnerID(ctx context.Context) string {
+	ownerID, _ := ctx.Value(ownerIDContextKey{}).(string)
+	return ownerID
 }

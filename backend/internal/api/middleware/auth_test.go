@@ -18,7 +18,7 @@ import (
 func okNext(reached *bool, owner *string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		*reached = true
-		*owner = auth.Owner(r.Context())
+		*owner = auth.OwnerID(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 }

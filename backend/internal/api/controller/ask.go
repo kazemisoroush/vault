@@ -65,7 +65,8 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nearest, err := c.vectors.Query(r.Context(), auth.Owner(r.Context()), vector, shortlistSize)
+	ownerID := auth.OwnerID(r.Context())
+	nearest, err := c.vectors.Query(r.Context(), ownerID, vector, shortlistSize)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not search the vectors")
 		return

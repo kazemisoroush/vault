@@ -20,7 +20,7 @@ import (
 
 // withOwner returns the request carrying an authenticated owner, as the auth middleware would.
 func withOwner(r *http.Request, owner string) *http.Request {
-	return r.WithContext(auth.WithOwner(r.Context(), owner))
+	return r.WithContext(auth.WithOwnerID(r.Context(), owner))
 }
 
 func TestDropStampsTheOwner(t *testing.T) {
@@ -41,14 +41,14 @@ func TestDropStampsTheOwner(t *testing.T) {
 	c.Drop(httptest.NewRecorder(), req)
 
 	// Assert
-	assert.Equal(t, "alice", saved.Owner)
+	assert.Equal(t, "alice", saved.OwnerID)
 }
 
 func TestGetHidesAnotherOwnersFile(t *testing.T) {
 	// Arrange: the record exists but belongs to bob; alice must see a 404, not a 403.
 	idx, blobs, store := mockDeps(t)
 	c := NewFileController(idx, blobs, store)
-	idx.EXPECT().Get(gomock.Any(), "f1").Return(domain.File{ID: "f1", Owner: "bob", Key: "files/f1"}, nil)
+	idx.EXPECT().Get(gomock.Any(), "f1").Return(domain.File{ID: "f1", OwnerID: "bob", Key: "files/f1"}, nil)
 	req := withOwner(httptest.NewRequest(http.MethodGet, "/files/f1", nil), "alice")
 	req.SetPathValue("id", "f1")
 	rec := httptest.NewRecorder()
@@ -86,7 +86,7 @@ func TestAskExcludesOtherOwnersFiles(t *testing.T) {
 	embedder.EXPECT().Embed(gomock.Any(), "invoice").Return([]float32{0.1}, nil)
 	// The vector store filters to alice in the query itself, so bob's vector never comes back.
 	store.EXPECT().Query(gomock.Any(), "alice", gomock.Any(), gomock.Any()).Return([]string{"mine"}, nil)
-	idx.EXPECT().Get(gomock.Any(), "mine").Return(domain.File{ID: "mine", Owner: "alice", Key: "files/mine"}, nil)
+	idx.EXPECT().Get(gomock.Any(), "mine").Return(domain.File{ID: "mine", OwnerID: "alice", Key: "files/mine"}, nil)
 
 	var shortlist []domain.File
 	retriever.EXPECT().Match(gomock.Any(), "invoice", gomock.Any()).DoAndReturn(

@@ -33,13 +33,13 @@ func (m *AuthMiddleware) Wrap(next http.Handler) http.Handler {
 			unauthorized(w, "missing bearer token")
 			return
 		}
-		owner, err := m.verifier.Verify(token)
+		ownerID, err := m.verifier.Verify(token)
 		if err != nil {
 			unauthorized(w, "invalid token")
 			return
 		}
 
-		next.ServeHTTP(w, r.WithContext(auth.WithOwner(r.Context(), owner)))
+		next.ServeHTTP(w, r.WithContext(auth.WithOwnerID(r.Context(), ownerID)))
 	})
 }
 

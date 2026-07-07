@@ -44,7 +44,7 @@ func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 	hash := hashOf(content)
 	staging := "uploads/upl-1"
 	canonical := "files/" + hash
-	pending := domain.File{ID: "upl-1", Owner: "alice", Key: staging, Name: "petrol.jpg", Status: domain.StatusPending, Meta: map[string]string{"note": "keep"}}
+	pending := domain.File{ID: "upl-1", OwnerID: "alice", Key: staging, Name: "petrol.jpg", Status: domain.StatusPending, Meta: map[string]string{"note": "keep"}}
 
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
 	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)

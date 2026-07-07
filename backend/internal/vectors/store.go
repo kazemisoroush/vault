@@ -7,7 +7,7 @@ import "context"
 
 // Store keeps one owner-tagged vector per file and returns the nearest ids owned by the caller.
 type Store interface {
-	Put(ctx context.Context, id string, owner string, vector []float32) error
-	Query(ctx context.Context, owner string, vector []float32, topK int32) ([]string, error)
+	Put(ctx context.Context, id string, ownerID string, vector []float32) error
+	Query(ctx context.Context, ownerID string, vector []float32, topK int32) ([]string, error)
 	Delete(ctx context.Context, id string) error
 }
