@@ -84,9 +84,9 @@ func TestAskExcludesOtherOwnersFiles(t *testing.T) {
 	c := NewAskController(idx, blobs, embedder, store, retriever)
 
 	embedder.EXPECT().Embed(gomock.Any(), "invoice").Return([]float32{0.1}, nil)
-	store.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).Return([]string{"mine", "theirs"}, nil)
+	// The vector store filters to alice in the query itself, so bob's vector never comes back.
+	store.EXPECT().Query(gomock.Any(), "alice", gomock.Any(), gomock.Any()).Return([]string{"mine"}, nil)
 	idx.EXPECT().Get(gomock.Any(), "mine").Return(domain.File{ID: "mine", Owner: "alice", Key: "files/mine"}, nil)
-	idx.EXPECT().Get(gomock.Any(), "theirs").Return(domain.File{ID: "theirs", Owner: "bob", Key: "files/theirs"}, nil)
 
 	var shortlist []domain.File
 	retriever.EXPECT().Match(gomock.Any(), "invoice", gomock.Any()).DoAndReturn(
@@ -102,7 +102,7 @@ func TestAskExcludesOtherOwnersFiles(t *testing.T) {
 	// Act
 	c.Ask(rec, req)
 
-	// Assert: bob's file never reached the model, and the result set is alice's only.
+	// Assert: the query was scoped to alice, so only her file reached the model and the results.
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Len(t, shortlist, 1)
 	assert.Equal(t, "mine", shortlist[0].ID)

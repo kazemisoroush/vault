@@ -70,24 +70,12 @@ func (d *DynamoIndex) Get(ctx context.Context, id string) (domain.File, error) {
 // List returns one page of file records and the cursor for the next page.
 // List returns one page of the owner's records.
 func (d *DynamoIndex) List(ctx context.Context, owner string, limit int32, cursor string) ([]domain.File, string, error) {
-	return d.scan(ctx, &owner, limit, cursor)
-}
-
-// ListAll returns one page of every record, for system callers such as the backfill.
-func (d *DynamoIndex) ListAll(ctx context.Context, limit int32, cursor string) ([]domain.File, string, error) {
-	return d.scan(ctx, nil, limit, cursor)
-}
-
-// scan pages the table, filtering to one owner when owner is non-nil.
-func (d *DynamoIndex) scan(ctx context.Context, owner *string, limit int32, cursor string) ([]domain.File, string, error) {
 	input := &dynamodb.ScanInput{
-		TableName: aws.String(d.table),
-		Limit:     aws.Int32(limit),
-	}
-	if owner != nil {
-		input.FilterExpression = aws.String("#owner = :owner")
-		input.ExpressionAttributeNames = map[string]string{"#owner": "owner"}
-		input.ExpressionAttributeValues = map[string]types.AttributeValue{":owner": &types.AttributeValueMemberS{Value: *owner}}
+		TableName:                 aws.String(d.table),
+		Limit:                     aws.Int32(limit),
+		FilterExpression:          aws.String("#owner = :owner"),
+		ExpressionAttributeNames:  map[string]string{"#owner": "owner"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{":owner": &types.AttributeValueMemberS{Value: owner}},
 	}
 	if cursor != "" {
 		id, err := decodeCursor(cursor)

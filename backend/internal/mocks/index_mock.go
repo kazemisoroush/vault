@@ -86,22 +86,6 @@ func (mr *MockIndexMockRecorder) List(ctx, owner, limit, cursor any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockIndex)(nil).List), ctx, owner, limit, cursor)
 }
 
-// ListAll mocks base method.
-func (m *MockIndex) ListAll(ctx context.Context, limit int32, cursor string) ([]domain.File, string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAll", ctx, limit, cursor)
-	ret0, _ := ret[0].([]domain.File)
-	ret1, _ := ret[1].(string)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// ListAll indicates an expected call of ListAll.
-func (mr *MockIndexMockRecorder) ListAll(ctx, limit, cursor any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockIndex)(nil).ListAll), ctx, limit, cursor)
-}
-
 // Put mocks base method.
 func (m *MockIndex) Put(ctx context.Context, file domain.File) error {
 	m.ctrl.T.Helper()

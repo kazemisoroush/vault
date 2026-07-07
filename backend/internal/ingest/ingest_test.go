@@ -44,7 +44,7 @@ func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 	hash := hashOf(content)
 	staging := "uploads/upl-1"
 	canonical := "files/" + hash
-	pending := domain.File{ID: "upl-1", Key: staging, Name: "petrol.jpg", Status: domain.StatusPending, Meta: map[string]string{"note": "keep"}}
+	pending := domain.File{ID: "upl-1", Owner: "alice", Key: staging, Name: "petrol.jpg", Status: domain.StatusPending, Meta: map[string]string{"note": "keep"}}
 
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
 	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
@@ -56,7 +56,7 @@ func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 		return nil
 	})
 	embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return([]float32{0.1}, nil)
-	store.EXPECT().Put(gomock.Any(), hash, []float32{0.1}).Return(nil)
+	store.EXPECT().Put(gomock.Any(), hash, "alice", []float32{0.1}).Return(nil)
 	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 

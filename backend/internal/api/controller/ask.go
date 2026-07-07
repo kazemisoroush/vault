@@ -65,7 +65,7 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nearest, err := c.vectors.Query(r.Context(), vector, shortlistSize)
+	nearest, err := c.vectors.Query(r.Context(), auth.Owner(r.Context()), vector, shortlistSize)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not search the vectors")
 		return
@@ -101,13 +101,12 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, askResponse{Answer: answer.Text, Results: results})
 }
 
-// load fetches the shortlisted records, keeping only the ones the caller owns.
+// load fetches the records for the owner-scoped shortlist the vector store returned.
 func (c *AskController) load(ctx context.Context, ids []string) []domain.File {
-	owner := auth.Owner(ctx)
 	files := make([]domain.File, 0, len(ids))
 	for _, id := range ids {
 		file, err := c.index.Get(ctx, id)
-		if err != nil || file.Owner != owner {
+		if err != nil {
 			continue
 		}
 		files = append(files, file)
