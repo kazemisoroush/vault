@@ -17,6 +17,7 @@ const (
 // File is one stored blob and its free-form metadata.
 type File struct {
 	ID          string            `json:"id" dynamodbav:"id"`
+	OwnerID     string            `json:"-" dynamodbav:"ownerId"`
 	Key         string            `json:"-" dynamodbav:"key"`
 	Name        string            `json:"name" dynamodbav:"name"`
 	ContentType string            `json:"contentType" dynamodbav:"contentType"`

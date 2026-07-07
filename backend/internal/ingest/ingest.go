@@ -120,7 +120,7 @@ func (h *Handler) embed(ctx context.Context, file domain.File) {
 		log.Printf("embed %s: %v", file.ID, err)
 		return
 	}
-	if err := h.vectors.Put(ctx, file.ID, vector); err != nil {
+	if err := h.vectors.Put(ctx, file.ID, file.OwnerID, vector); err != nil {
 		log.Printf("store vector for %s: %v", file.ID, err)
 	}
 }

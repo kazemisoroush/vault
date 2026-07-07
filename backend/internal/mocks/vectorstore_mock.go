@@ -55,30 +55,30 @@ func (mr *MockVectorStoreMockRecorder) Delete(ctx, id any) *gomock.Call {
 }
 
 // Put mocks base method.
-func (m *MockVectorStore) Put(ctx context.Context, id string, vector []float32) error {
+func (m *MockVectorStore) Put(ctx context.Context, id, owner string, vector []float32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Put", ctx, id, vector)
+	ret := m.ctrl.Call(m, "Put", ctx, id, owner, vector)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Put indicates an expected call of Put.
-func (mr *MockVectorStoreMockRecorder) Put(ctx, id, vector any) *gomock.Call {
+func (mr *MockVectorStoreMockRecorder) Put(ctx, id, owner, vector any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockVectorStore)(nil).Put), ctx, id, vector)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockVectorStore)(nil).Put), ctx, id, owner, vector)
 }
 
 // Query mocks base method.
-func (m *MockVectorStore) Query(ctx context.Context, vector []float32, topK int32) ([]string, error) {
+func (m *MockVectorStore) Query(ctx context.Context, owner string, vector []float32, topK int32) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Query", ctx, vector, topK)
+	ret := m.ctrl.Call(m, "Query", ctx, owner, vector, topK)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockVectorStoreMockRecorder) Query(ctx, vector, topK any) *gomock.Call {
+func (mr *MockVectorStoreMockRecorder) Query(ctx, owner, vector, topK any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockVectorStore)(nil).Query), ctx, vector, topK)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockVectorStore)(nil).Query), ctx, owner, vector, topK)
 }

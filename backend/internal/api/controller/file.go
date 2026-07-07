@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/kazemisoroush/vault/backend/internal/auth"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/index"
@@ -58,6 +59,7 @@ func (c *FileController) Drop(w http.ResponseWriter, r *http.Request) {
 	now := c.now().UTC()
 	file := domain.File{
 		ID:          c.newID(),
+		OwnerID:       auth.OwnerID(r.Context()),
 		Name:        req.Name,
 		ContentType: req.ContentType,
 		Size:        req.Size,
@@ -122,7 +124,8 @@ func (c *FileController) List(w http.ResponseWriter, r *http.Request) {
 		limit = min(int32(parsed), maxLimit)
 	}
 
-	files, cursor, err := c.index.List(r.Context(), limit, r.URL.Query().Get("cursor"))
+	ownerID := auth.OwnerID(r.Context())
+	files, cursor, err := c.index.List(r.Context(), ownerID, limit, r.URL.Query().Get("cursor"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not list files")
 		return

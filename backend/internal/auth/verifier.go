@@ -25,8 +25,8 @@ func NewVerifier(issuer, clientID string, keyFunc jwt.Keyfunc) *Verifier {
 	return &Verifier{issuer: issuer, clientID: clientID, keyFunc: keyFunc}
 }
 
-// Verify returns nil when the token is a valid access token for this client.
-func (v *Verifier) Verify(token string) error {
+// Verify returns the token's subject (the caller's Cognito sub) when it is a valid access token for this client.
+func (v *Verifier) Verify(token string) (string, error) {
 	claims := &Claims{}
 	_, err := jwt.ParseWithClaims(token, claims, v.keyFunc,
 		jwt.WithValidMethods([]string{"RS256"}),
@@ -34,13 +34,16 @@ func (v *Verifier) Verify(token string) error {
 		jwt.WithExpirationRequired(),
 	)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrUnauthorized, err)
+		return "", fmt.Errorf("%w: %w", ErrUnauthorized, err)
 	}
 	if claims.TokenUse != accessTokenUse {
-		return fmt.Errorf("%w: token_use %q is not %q", ErrUnauthorized, claims.TokenUse, accessTokenUse)
+		return "", fmt.Errorf("%w: token_use %q is not %q", ErrUnauthorized, claims.TokenUse, accessTokenUse)
 	}
 	if claims.ClientID != v.clientID {
-		return fmt.Errorf("%w: client_id does not match", ErrUnauthorized)
+		return "", fmt.Errorf("%w: client_id does not match", ErrUnauthorized)
 	}
-	return nil
+	if claims.Subject == "" {
+		return "", fmt.Errorf("%w: token has no subject", ErrUnauthorized)
+	}
+	return claims.Subject, nil
 }

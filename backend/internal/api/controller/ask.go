@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kazemisoroush/vault/backend/internal/auth"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/embed"
@@ -64,7 +65,8 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nearest, err := c.vectors.Query(r.Context(), vector, shortlistSize)
+	ownerID := auth.OwnerID(r.Context())
+	nearest, err := c.vectors.Query(r.Context(), ownerID, vector, shortlistSize)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not search the vectors")
 		return
@@ -100,7 +102,7 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, askResponse{Answer: answer.Text, Results: results})
 }
 
-// load fetches the records for the nearest ids, skipping any whose record has since gone.
+// load fetches the records for the owner-scoped shortlist the vector store returned.
 func (c *AskController) load(ctx context.Context, ids []string) []domain.File {
 	files := make([]domain.File, 0, len(ids))
 	for _, id := range ids {
