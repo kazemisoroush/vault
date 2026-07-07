@@ -171,6 +171,8 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Actions: jsii.Strings(
 			"s3vectors:PutVectors",
 			"s3vectors:QueryVectors",
+			// GetVectors is required because an owner-filtered query reads vector metadata.
+			"s3vectors:GetVectors",
 			"s3vectors:DeleteVectors",
 		),
 		Resources: jsii.Strings(vectorArn, vectorArn+"/index/"+vectorIndexName),
