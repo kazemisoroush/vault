@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -61,6 +62,7 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 
 	vector, err := c.embedder.Embed(r.Context(), req.Query)
 	if err != nil {
+		log.Printf("ask: embed query: %v", err)
 		writeError(w, http.StatusInternalServerError, "could not embed the query")
 		return
 	}
@@ -68,6 +70,7 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 	ownerID := auth.OwnerID(r.Context())
 	nearest, err := c.vectors.Query(r.Context(), ownerID, vector, shortlistSize)
 	if err != nil {
+		log.Printf("ask: query vectors: %v", err)
 		writeError(w, http.StatusInternalServerError, "could not search the vectors")
 		return
 	}
@@ -76,6 +79,7 @@ func (c *AskController) Ask(w http.ResponseWriter, r *http.Request) {
 
 	answer, err := c.retriever.Match(r.Context(), req.Query, shortlist)
 	if err != nil {
+		log.Printf("ask: rerank: %v", err)
 		writeError(w, http.StatusInternalServerError, "could not run the search")
 		return
 	}
