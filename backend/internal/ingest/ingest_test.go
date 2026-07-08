@@ -73,6 +73,8 @@ func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 	assert.Equal(t, "petrol.jpg", saved.Name)
 	assert.Equal(t, "Shell", saved.Meta["vendor"])
 	assert.Equal(t, "keep", saved.Meta["note"])
+	// The normalised attributes are derived from the merged metadata on settle.
+	assert.Equal(t, "Shell", saved.Attributes.Vendor)
 }
 
 func TestSettleExtractionFailsMarksFailedAndCleansUp(t *testing.T) {

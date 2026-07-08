@@ -24,8 +24,53 @@ type File struct {
 	Size        int64             `json:"size" dynamodbav:"size"`
 	Status      string            `json:"status" dynamodbav:"status"`
 	Meta        map[string]string `json:"meta,omitempty" dynamodbav:"meta,omitempty"`
+	Attributes  Attributes        `json:"-" dynamodbav:"attributes,omitempty"`
 	CreatedAt   time.Time         `json:"createdAt" dynamodbav:"createdAt"`
 	UpdatedAt   time.Time         `json:"updatedAt" dynamodbav:"updatedAt"`
+}
+
+// Attributes are the normalised, queryable facts pulled out of a file's free-form Meta.
+// They give structured search a stable set of keys to filter on, next to the raw Meta.
+type Attributes struct {
+	Person  string `json:"person,omitempty" dynamodbav:"person,omitempty"`
+	DocType string `json:"docType,omitempty" dynamodbav:"docType,omitempty"`
+	Vendor  string `json:"vendor,omitempty" dynamodbav:"vendor,omitempty"`
+	Amount  string `json:"amount,omitempty" dynamodbav:"amount,omitempty"`
+	Date    string `json:"date,omitempty" dynamodbav:"date,omitempty"`
+}
+
+// attributeKeys lists, for each normalised attribute, the free-form Meta keys that feed it,
+// in order of preference. Keys are matched without regard to case or surrounding spaces.
+var attributeKeys = map[string][]string{
+	"person":  {"person", "name", "patient", "cardholder"},
+	"docType": {"document type", "documenttype", "doctype", "type", "category"},
+	"vendor":  {"vendor", "merchant", "store", "place", "retailer"},
+	"amount":  {"amount", "total", "price", "cost"},
+	"date":    {"date", "issued", "purchased"},
+}
+
+// AttributesFromMeta derives the normalised attributes from a file's free-form Meta.
+// For each attribute it takes the first candidate key that carries a non-empty value.
+func AttributesFromMeta(meta map[string]string) Attributes {
+	lookup := make(map[string]string, len(meta))
+	for key, value := range meta {
+		lookup[strings.ToLower(strings.TrimSpace(key))] = strings.TrimSpace(value)
+	}
+	pick := func(attr string) string {
+		for _, candidate := range attributeKeys[attr] {
+			if value := lookup[candidate]; value != "" {
+				return value
+			}
+		}
+		return ""
+	}
+	return Attributes{
+		Person:  pick("person"),
+		DocType: pick("docType"),
+		Vendor:  pick("vendor"),
+		Amount:  pick("amount"),
+		Date:    pick("date"),
+	}
 }
 
 // SearchText is the name and metadata joined into the text that gets embedded for search.

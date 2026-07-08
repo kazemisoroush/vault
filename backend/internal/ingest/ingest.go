@@ -125,12 +125,14 @@ func (h *Handler) embed(ctx context.Context, file domain.File) {
 	}
 }
 
-// save merges any extracted metadata, sets the status, persists the record, and returns it.
+// save merges any extracted metadata, derives the normalised attributes, sets the status,
+// persists the record, and returns it.
 func (h *Handler) save(ctx context.Context, file domain.File, status string, meta map[string]string) (domain.File, error) {
 	if meta != nil && file.Meta == nil {
 		file.Meta = map[string]string{}
 	}
 	maps.Copy(file.Meta, meta)
+	file.Attributes = domain.AttributesFromMeta(file.Meta)
 	file.Status = status
 	file.UpdatedAt = h.now().UTC()
 
