@@ -75,3 +75,16 @@ func TestAttributesFromMetaEmptyWhenNothingMatches(t *testing.T) {
 	// Act + Assert
 	assert.Equal(t, domain.Attributes{}, domain.AttributesFromMeta(meta))
 }
+
+func TestAttributesFromMetaIsDeterministicOnColludingKeys(t *testing.T) {
+	// Arrange: keys that fold to the same lookup key, including an empty value.
+	meta := map[string]string{"Vendor": "", "vendor ": "Shell", " VENDOR": "Coles"}
+
+	// Act + Assert: the empty value is never chosen, and the result is stable across runs
+	// despite Go's random map iteration order.
+	first := domain.AttributesFromMeta(meta).Vendor
+	assert.NotEmpty(t, first)
+	for range 50 {
+		assert.Equal(t, first, domain.AttributesFromMeta(meta).Vendor)
+	}
+}

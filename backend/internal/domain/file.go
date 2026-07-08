@@ -52,9 +52,24 @@ var attributeKeys = map[string][]string{
 // AttributesFromMeta derives the normalised attributes from a file's free-form Meta.
 // For each attribute it takes the first candidate key that carries a non-empty value.
 func AttributesFromMeta(meta map[string]string) Attributes {
+	// Keys are folded to lower case without surrounding spaces, so two Meta keys that differ
+	// only in case or spacing land on the same lookup key. Fold in sorted order and keep the
+	// first non-empty value, so the result never depends on Go's random map iteration order.
+	keys := make([]string, 0, len(meta))
+	for key := range meta {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	lookup := make(map[string]string, len(meta))
-	for key, value := range meta {
-		lookup[strings.ToLower(strings.TrimSpace(key))] = strings.TrimSpace(value)
+	for _, key := range keys {
+		folded := strings.ToLower(strings.TrimSpace(key))
+		value := strings.TrimSpace(meta[key])
+		if value == "" {
+			continue
+		}
+		if _, seen := lookup[folded]; !seen {
+			lookup[folded] = value
+		}
 	}
 	pick := func(attr string) string {
 		for _, candidate := range attributeKeys[attr] {
