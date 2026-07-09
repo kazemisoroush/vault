@@ -137,7 +137,11 @@ func TestConverseStopsAtTheRoundCap(t *testing.T) {
 		toolReply("t3", "loop", `{}`),
 	}}
 	model := newModel(client, "test-model", "agent", &fakeRecorder{})
-	execute := func(_ context.Context, _ ToolCall) (string, error) { return "again", nil }
+	runs := 0
+	execute := func(_ context.Context, _ ToolCall) (string, error) {
+		runs++
+		return "again", nil
+	}
 
 	// Act: cap the exchange at two rounds.
 	_, err := model.Converse(context.Background(), Conversation{
@@ -148,10 +152,12 @@ func TestConverseStopsAtTheRoundCap(t *testing.T) {
 		MaxRounds: 2,
 	})
 
-	// Assert: it gives up after the cap rather than looping forever.
+	// Assert: it gives up after the cap rather than looping forever, and does not run tools on
+	// the last round since their results could not be used.
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "within 2 rounds")
 	assert.Len(t, client.calls, 2)
+	assert.Equal(t, 1, runs)
 }
 
 func TestCompleteStillReturnsTheReplyAndRecords(t *testing.T) {

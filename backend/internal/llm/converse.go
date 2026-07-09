@@ -79,6 +79,11 @@ func (m *Model) Converse(ctx context.Context, c Conversation) (string, error) {
 		if resp.StopReason != anthropic.StopReasonToolUse {
 			return collectText(resp.Content), nil
 		}
+		if round == rounds-1 {
+			// The model wants more tools but this was the last allowed round, so running them
+			// would only waste the work. Stop now with the cap error.
+			break
+		}
 
 		messages = append(messages, resp.ToParam())
 		messages = append(messages, anthropic.NewUserMessage(m.runTools(ctx, resp, c.Execute)...))
