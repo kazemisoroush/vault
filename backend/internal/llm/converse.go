@@ -54,8 +54,8 @@ type Conversation struct {
 	MaxRounds int
 }
 
-// Converse runs a tool-using exchange to a final text answer. The model may call the given tools;
-// each call is run by Execute and its result is fed back, until the model stops asking for tools
+// Converse runs a tool-using exchange to a final text answer. The model may call the given tools.
+// Each call is run by Execute and its result is fed back, until the model stops asking for tools
 // or the round cap is reached. Every model call is recorded on the trace.
 func (m *Model) Converse(ctx context.Context, c Conversation) (string, error) {
 	rounds := c.MaxRounds

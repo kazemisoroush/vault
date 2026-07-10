@@ -52,7 +52,7 @@ func (m *Model) send(ctx context.Context, label string, params anthropic.Message
 	if err != nil {
 		call.Error = err.Error()
 		m.recorder.Record(ctx, call)
-		return nil, fmt.Errorf("bedrock complete: %w", err)
+		return nil, fmt.Errorf("model call: %w", err)
 	}
 
 	call.OK = true
