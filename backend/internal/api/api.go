@@ -18,8 +18,8 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
-// New builds the API handler: controllers behind the router, wrapped in middleware.
-func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, store vectors.Store, answerer agent.Answerer, calls controller.CallLister, emitter telemetry.Emitter) (http.Handler, error) {
+// NewHandler builds the API handler: controllers behind the router, wrapped in middleware.
+func NewHandler(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, store vectors.Store, answerer agent.Answerer, calls controller.CallLister, emitter telemetry.Emitter) (http.Handler, error) {
 	router := NewRouter(
 		controller.NewFileController(idx, blobs, store),
 		controller.NewAskController(answerer, blobs),

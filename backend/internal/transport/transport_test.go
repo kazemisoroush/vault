@@ -33,7 +33,7 @@ func TestHandleRoutesS3ToIngester(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{}, nil
 	}
-	adapter := transport.New(proxy, ingester)
+	adapter := transport.NewTransport(proxy, ingester)
 
 	// Act
 	_, err := adapter.Handle(context.Background(), json.RawMessage(s3Payload))
@@ -53,7 +53,7 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 	}
-	adapter := transport.New(proxy, ingester)
+	adapter := transport.NewTransport(proxy, ingester)
 
 	// Act
 	resp, err := adapter.Handle(context.Background(), json.RawMessage(apiPayload))

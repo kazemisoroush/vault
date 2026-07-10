@@ -50,9 +50,9 @@ func main() {
 		log.Fatalf("configure vector store: %v", err)
 	}
 
-	answerer := agent.New(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, "agent", recorder), embedder, vectorStore, idx)
+	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, "agent", recorder), embedder, vectorStore, idx)
 
-	apiHandler, err := api.New(ctx, cfg, idx, blobs, vectorStore, answerer, recorder, telemetry.NewEMFEmitter(os.Stdout))
+	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}
@@ -62,8 +62,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure extractor: %v", err)
 	}
-	ingester := ingest.New(idx, blobs, extractor, embedder, vectorStore)
+	ingester := ingest.NewHandler(idx, blobs, extractor, embedder, vectorStore)
 
-	adapter := transport.New(proxy, ingester)
+	adapter := transport.NewTransport(proxy, ingester)
 	lambda.Start(adapter.Handle)
 }

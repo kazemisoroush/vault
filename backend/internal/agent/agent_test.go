@@ -41,7 +41,7 @@ func newAgent(t *testing.T, model Converser) (*Agent, *mocks.MockEmbedder, *mock
 	embedder := mocks.NewMockEmbedder(ctrl)
 	store := mocks.NewMockVectorStore(ctrl)
 	idx := mocks.NewMockIndex(ctrl)
-	return New(model, embedder, store, idx), embedder, store, idx
+	return NewAgent(model, embedder, store, idx), embedder, store, idx
 }
 
 func TestAnswerRunsSearchAndReturnsCitedFiles(t *testing.T) {

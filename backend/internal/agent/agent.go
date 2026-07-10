@@ -46,8 +46,8 @@ type Agent struct {
 	index    index.Index
 }
 
-// New builds an Agent over the model and the stores that already serve the vault.
-func New(model Converser, embedder embed.Embedder, store vectors.Store, idx index.Index) *Agent {
+// NewAgent builds an Agent over the model and the stores that already serve the vault.
+func NewAgent(model Converser, embedder embed.Embedder, store vectors.Store, idx index.Index) *Agent {
 	return &Agent{model: model, embedder: embedder, vectors: store, index: idx}
 }
 

@@ -32,8 +32,8 @@ type Handler struct {
 	now       func() time.Time
 }
 
-// New builds an ingest Handler with a real clock.
-func New(idx index.Index, blobs blob.Store, extractor extract.Extractor, embedder embed.Embedder, store vectors.Store) *Handler {
+// NewHandler builds an ingest Handler with a real clock.
+func NewHandler(idx index.Index, blobs blob.Store, extractor extract.Extractor, embedder embed.Embedder, store vectors.Store) *Handler {
 	return &Handler{index: idx, blobs: blobs, extractor: extractor, embedder: embedder, vectors: store, now: time.Now}
 }
 
