@@ -41,9 +41,8 @@ type Conversation struct {
 	// Content is set it is used only as the label.
 	Prompt string
 	// Content is the user turn when it is more than plain text, for example an image or a PDF.
-	// It is set by callers that already build model content blocks, such as extraction. When
-	// empty, the user turn is Prompt as text.
-	Content []anthropic.ContentBlockParamUnion
+	// Build it with Text, Image, and Document. When empty, the user turn is Prompt as text.
+	Content []Part
 	// MaxTokens caps each model reply.
 	MaxTokens int64
 	// Tools the model may call.
@@ -136,7 +135,7 @@ func toolUnions(tools []Tool) []anthropic.ToolUnionParam {
 // it, otherwise the plain Prompt text.
 func firstTurn(c Conversation) []anthropic.ContentBlockParamUnion {
 	if len(c.Content) > 0 {
-		return c.Content
+		return blocks(c.Content)
 	}
 	return []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(c.Prompt)}
 }

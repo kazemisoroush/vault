@@ -169,7 +169,7 @@ func TestConverseWithContentSendsItAndReturnsTheReply(t *testing.T) {
 	// Act
 	got, err := model.Converse(context.Background(), Conversation{
 		Prompt:    "a prompt",
-		Content:   []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock("hello")},
+		Content:   []Part{Text("hello")},
 		MaxTokens: 100,
 	})
 

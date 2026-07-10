@@ -88,26 +88,18 @@ func TestOfficeTextRejectsNonZip(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestFileBlockOfficeDecodesToText(t *testing.T) {
+func TestOfficeContentDecodesToText(t *testing.T) {
 	// Arrange
 	content := zipBytes(t, map[string]string{"word/document.xml": `<w:t>Invoice total 52.30</w:t>`})
 
-	// Act
-	block := fileBlock(content, docxType)
-
-	// Assert
-	require.NotNil(t, block.OfText)
-	assert.Contains(t, block.OfText.Text, "Invoice total")
+	// Act + Assert
+	assert.Contains(t, officeContent(content), "Invoice total")
 }
 
-func TestFileBlockOfficeFallsBackWhenEmpty(t *testing.T) {
+func TestOfficeContentFallsBackWhenEmpty(t *testing.T) {
 	// Arrange: an office file with no readable content part.
 	content := zipBytes(t, map[string]string{"docProps/app.xml": `<Properties/>`})
 
-	// Act
-	block := fileBlock(content, docxType)
-
-	// Assert: a non-empty placeholder so the model still returns valid JSON.
-	require.NotNil(t, block.OfText)
-	assert.Equal(t, "(no readable text in this document)", block.OfText.Text)
+	// Act + Assert: a non-empty placeholder so the model still returns valid JSON.
+	assert.Equal(t, "(no readable text in this document)", officeContent(content))
 }

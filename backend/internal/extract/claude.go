@@ -2,12 +2,9 @@ package extract
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"maps"
 	"strings"
-
-	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
@@ -36,7 +33,7 @@ func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentTy
 	prompt := fmt.Sprintf("%s\n\n[file: %s, %d bytes]", instruction, contentType, len(content))
 	reply, err := e.model.Converse(ctx, llm.Conversation{
 		Prompt:    prompt,
-		Content:   []anthropic.ContentBlockParamUnion{fileBlock(content, contentType), anthropic.NewTextBlock(instruction)},
+		Content:   []llm.Part{fileBlock(content, contentType), llm.Text(instruction)},
 		MaxTokens: maxTokens,
 	})
 	if err != nil {
@@ -49,21 +46,27 @@ func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentTy
 	return result, nil
 }
 
-// fileBlock wraps the bytes as the content block that fits the content type, decoding office
+// fileBlock wraps the bytes as the content part that fits the content type, decoding office
 // documents to text so the model reads their content instead of the raw zip.
-func fileBlock(content []byte, contentType string) anthropic.ContentBlockParamUnion {
+func fileBlock(content []byte, contentType string) llm.Part {
 	switch {
 	case strings.HasPrefix(contentType, "image/"):
-		return anthropic.NewImageBlockBase64(contentType, base64.StdEncoding.EncodeToString(content))
+		return llm.Image(contentType, content)
 	case contentType == "application/pdf":
-		return anthropic.NewDocumentBlock(anthropic.Base64PDFSourceParam{Data: base64.StdEncoding.EncodeToString(content)})
+		return llm.Document(content)
 	case isOffice(contentType):
-		text, err := officeText(content)
-		if err != nil || strings.TrimSpace(text) == "" {
-			text = "(no readable text in this document)"
-		}
-		return anthropic.NewTextBlock(text)
+		return llm.Text(officeContent(content))
 	default:
-		return anthropic.NewTextBlock(string(content))
+		return llm.Text(string(content))
 	}
+}
+
+// officeContent decodes an office document to text, or a placeholder when it has none, so the
+// model still gets a non-empty turn and returns valid JSON.
+func officeContent(content []byte) string {
+	text, err := officeText(content)
+	if err != nil || strings.TrimSpace(text) == "" {
+		return "(no readable text in this document)"
+	}
+	return text
 }
