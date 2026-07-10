@@ -8,5 +8,5 @@ linters:
       analyze-types: true
       forbid:
         - pattern: '^\w+\.New$'
-          pkg: '^github\.com/kazemisoroush/vault/backend'
+          pkg: '^github\.com/kazemisoroush/'
           msg: "Constructors must be named explicitly for what they build (e.g. NewHandler, NewAgent), not a bare New."
