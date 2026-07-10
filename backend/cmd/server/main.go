@@ -11,13 +11,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"github.com/kazemisoroush/vault/backend/internal/agent"
 	"github.com/kazemisoroush/vault/backend/internal/api"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/calls"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
-	"github.com/kazemisoroush/vault/backend/internal/retrieve"
+	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
@@ -45,12 +46,9 @@ func main() {
 		log.Fatalf("configure vector store: %v", err)
 	}
 
-	retriever, err := retrieve.NewClaudeRetriever(ctx, cfg.BedrockRegion, cfg.RerankModel, recorder)
-	if err != nil {
-		log.Fatalf("configure retriever: %v", err)
-	}
+	answerer := agent.New(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, "agent", recorder), embedder, vectorStore, idx)
 
-	apiHandler, err := api.New(ctx, cfg, idx, blobs, embedder, vectorStore, retriever, recorder, telemetry.NewEMFEmitter(os.Stdout))
+	apiHandler, err := api.New(ctx, cfg, idx, blobs, vectorStore, answerer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}

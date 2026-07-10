@@ -11,57 +11,38 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/kazemisoroush/vault/backend/internal/agent"
+	agentmock "github.com/kazemisoroush/vault/backend/internal/agent/mock"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
-	"github.com/kazemisoroush/vault/backend/internal/retrieve"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
-type askMocks struct {
-	index     *mocks.MockIndex
-	blobs     *mocks.MockStore
-	embedder  *mocks.MockEmbedder
-	vectors   *mocks.MockVectorStore
-	retriever *mocks.MockRetriever
-}
-
-func askDeps(t *testing.T) askMocks {
+func askController(t *testing.T) (*AskController, *agentmock.MockAnswerer, *mocks.MockStore) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-	return askMocks{
-		index:     mocks.NewMockIndex(ctrl),
-		blobs:     mocks.NewMockStore(ctrl),
-		embedder:  mocks.NewMockEmbedder(ctrl),
-		vectors:   mocks.NewMockVectorStore(ctrl),
-		retriever: mocks.NewMockRetriever(ctrl),
-	}
+	answerer := agentmock.NewMockAnswerer(ctrl)
+	blobs := mocks.NewMockStore(ctrl)
+	return NewAskController(answerer, blobs), answerer, blobs
 }
 
-func (m askMocks) controller() *AskController {
-	return NewAskController(m.index, m.blobs, m.embedder, m.vectors, m.retriever)
-}
-
-func TestAskReturnsMatchesInOrder(t *testing.T) {
-	// Arrange
-	m := askDeps(t)
-	vec := []float32{0.1, 0.2}
+func TestAskReturnsTheAnswerAndItsFilesAsLinks(t *testing.T) {
+	// Arrange: the agent answers with two files it used, in order.
+	c, answerer, blobs := askController(t)
 	files := []domain.File{
-		{ID: "a", Name: "one", Key: "files/a"},
 		{ID: "b", Name: "two", Key: "files/b"},
+		{ID: "a", Name: "one", Key: "files/a"},
 	}
-	m.embedder.EXPECT().Embed(gomock.Any(), "petrol receipts").Return(vec, nil)
-	m.vectors.EXPECT().Query(gomock.Any(), gomock.Any(), vec, shortlistSize).Return([]string{"a", "b"}, nil)
-	m.index.EXPECT().Get(gomock.Any(), "a").Return(files[0], nil)
-	m.index.EXPECT().Get(gomock.Any(), "b").Return(files[1], nil)
-	m.retriever.EXPECT().Match(gomock.Any(), "petrol receipts", files).Return(retrieve.Answer{Text: "your passport number is RA3495037", IDs: []string{"b", "a"}}, nil)
-	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/b", gomock.Any()).Return("https://get/b", nil)
-	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
+	answerer.EXPECT().Answer(gomock.Any(), gomock.Any(), "petrol receipts").
+		Return(agent.Result{Text: "your passport number is RA3495037", Files: files}, nil)
+	blobs.EXPECT().PresignGet(gomock.Any(), "files/b", gomock.Any()).Return("https://get/b", nil)
+	blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"petrol receipts"}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	m.controller().Ask(rec, req)
+	c.Ask(rec, req)
 
-	// Assert
+	// Assert: answer plus each used file, in order, with a download link.
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := rec.Body.String()
 	assert.Less(t, strings.Index(body, `"id":"b"`), strings.Index(body, `"id":"a"`))
@@ -71,83 +52,44 @@ func TestAskReturnsMatchesInOrder(t *testing.T) {
 
 func TestAskRejectsEmptyQuery(t *testing.T) {
 	// Arrange
-	m := askDeps(t)
+	c, _, _ := askController(t)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"   "}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	m.controller().Ask(rec, req)
+	c.Ask(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestAskSkipsUnknownIDs(t *testing.T) {
-	// Arrange
-	m := askDeps(t)
-	vec := []float32{0.1}
-	files := []domain.File{{ID: "a", Name: "one", Key: "files/a"}}
-	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
-	m.vectors.EXPECT().Query(gomock.Any(), gomock.Any(), vec, shortlistSize).Return([]string{"a"}, nil)
-	m.index.EXPECT().Get(gomock.Any(), "a").Return(files[0], nil)
-	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), files).Return(retrieve.Answer{IDs: []string{"ghost", "a"}}, nil)
-	m.blobs.EXPECT().PresignGet(gomock.Any(), "files/a", gomock.Any()).Return("https://get/a", nil)
+func TestAskReturnsAnAnswerWithNoFiles(t *testing.T) {
+	// Arrange: a plain answer that cited no files.
+	c, answerer, _ := askController(t)
+	answerer.EXPECT().Answer(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(agent.Result{Text: "nothing matched", Files: nil}, nil)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	m.controller().Ask(rec, req)
-
-	// Assert
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, 1, strings.Count(rec.Body.String(), `"downloadUrl"`))
-}
-
-func TestAskSkipsRecordsThatVanished(t *testing.T) {
-	// Arrange: the vector store still has an id whose record was deleted.
-	m := askDeps(t)
-	vec := []float32{0.1}
-	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
-	m.vectors.EXPECT().Query(gomock.Any(), gomock.Any(), vec, shortlistSize).Return([]string{"ghost"}, nil)
-	m.index.EXPECT().Get(gomock.Any(), "ghost").Return(domain.File{}, context.DeadlineExceeded)
-	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), []domain.File{}).Return(retrieve.Answer{IDs: []string{}}, nil)
-	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
-	rec := httptest.NewRecorder()
-
-	// Act
-	m.controller().Ask(rec, req)
+	c.Ask(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, 0, strings.Count(rec.Body.String(), `"downloadUrl"`))
+	assert.Contains(t, rec.Body.String(), `"answer":"nothing matched"`)
 }
 
-func TestAskReturnsErrorWhenEmbedFails(t *testing.T) {
+func TestAskReturnsErrorWhenTheAgentFails(t *testing.T) {
 	// Arrange
-	m := askDeps(t)
-	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(nil, context.DeadlineExceeded)
+	c, answerer, _ := askController(t)
+	answerer.EXPECT().Answer(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(agent.Result{}, context.DeadlineExceeded)
 	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
 	rec := httptest.NewRecorder()
 
 	// Act
-	m.controller().Ask(rec, req)
-
-	// Assert
-	require.Equal(t, http.StatusInternalServerError, rec.Code)
-}
-
-func TestAskReturnsErrorWhenRetrieverFails(t *testing.T) {
-	// Arrange
-	m := askDeps(t)
-	vec := []float32{0.1}
-	m.embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return(vec, nil)
-	m.vectors.EXPECT().Query(gomock.Any(), gomock.Any(), vec, shortlistSize).Return([]string{}, nil)
-	m.retriever.EXPECT().Match(gomock.Any(), gomock.Any(), gomock.Any()).Return(retrieve.Answer{}, context.DeadlineExceeded)
-	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"anything"}`))
-	rec := httptest.NewRecorder()
-
-	// Act
-	m.controller().Ask(rec, req)
+	c.Ask(rec, req)
 
 	// Assert
 	require.Equal(t, http.StatusInternalServerError, rec.Code)

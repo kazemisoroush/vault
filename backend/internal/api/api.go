@@ -7,23 +7,22 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/kazemisoroush/vault/backend/internal/agent"
 	"github.com/kazemisoroush/vault/backend/internal/api/controller"
 	"github.com/kazemisoroush/vault/backend/internal/api/middleware"
 	"github.com/kazemisoroush/vault/backend/internal/auth"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/config"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
-	"github.com/kazemisoroush/vault/backend/internal/retrieve"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 // New builds the API handler: controllers behind the router, wrapped in middleware.
-func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, embedder embed.Embedder, store vectors.Store, retriever retrieve.Retriever, calls controller.CallLister, emitter telemetry.Emitter) (http.Handler, error) {
+func New(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, store vectors.Store, answerer agent.Answerer, calls controller.CallLister, emitter telemetry.Emitter) (http.Handler, error) {
 	router := NewRouter(
 		controller.NewFileController(idx, blobs, store),
-		controller.NewAskController(idx, blobs, embedder, store, retriever),
+		controller.NewAskController(answerer, blobs),
 		controller.NewCallsController(calls),
 		controller.NewHealthController(),
 		controller.NewMetricsController(emitter),

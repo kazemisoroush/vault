@@ -34,7 +34,11 @@ func NewClaudeExtractor(_ context.Context, region, model string, recorder llm.Re
 // Extract sends the file to the model and returns its flat metadata map.
 func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentType string) (map[string]string, error) {
 	prompt := fmt.Sprintf("%s\n\n[file: %s, %d bytes]", instruction, contentType, len(content))
-	reply, err := e.model.Complete(ctx, prompt, maxTokens, fileBlock(content, contentType), anthropic.NewTextBlock(instruction))
+	reply, err := e.model.Converse(ctx, llm.Conversation{
+		Prompt:    prompt,
+		Content:   []anthropic.ContentBlockParamUnion{fileBlock(content, contentType), anthropic.NewTextBlock(instruction)},
+		MaxTokens: maxTokens,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("bedrock extract: %w", err)
 	}
