@@ -2,3 +2,8 @@ version: "2"
 linters:
   enable:
     - wrapcheck
+  settings:
+    wrapcheck:
+      # Also flag errors returned unwrapped from inside our own packages, not just from
+      # external packages. This catches a bare `return err` after an internal call.
+      report-internal-errors: true
