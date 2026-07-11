@@ -66,8 +66,8 @@ func (a *Agent) Answer(ctx context.Context, ownerID, query string) (Result, erro
 		return Result{}, fmt.Errorf("agent converse: %w", err)
 	}
 
-	answer, ids := parseFinal(reply)
-	return Result{Text: answer, Files: a.load(ctx, ownerID, ids)}, nil
+	answer, fileIDs := parseFinal(reply)
+	return Result{Text: answer, Files: a.load(ctx, ownerID, fileIDs)}, nil
 }
 
 // load fetches the owner's records for the ids the model cited, skipping any it does not own or
@@ -88,7 +88,7 @@ func (a *Agent) load(ctx context.Context, ownerID string, ids []string) []domain
 const systemPrompt = `You are a personal file vault assistant. Answer the user's request about their files.
 You have tools to find files: search_by_meaning for fuzzy questions, find_by_facts to filter by a
 metadata value or a date range, and get_file to read one file by id. Use them as needed, then stop.
-Reply with ONLY a JSON object: {"answer": string, "ids": [string]}.
-- ids: the file ids you used to answer, most relevant first, or [] if none fit.
+Reply with ONLY a JSON object: {"answer": string, "fileIds": [string]}.
+- fileIds: the ids of the files you used to answer, most relevant first, or [] if none fit.
 - answer: a short, direct answer drawn only from the files you found, or "" for a plain find.
 No markdown, no commentary, only the JSON object.`

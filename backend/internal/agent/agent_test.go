@@ -47,8 +47,8 @@ func newAgent(t *testing.T, model Converser) (*Agent, *mocks.MockEmbedder, *mock
 func TestAnswerRunsSearchAndReturnsCitedFiles(t *testing.T) {
 	// Arrange: the model searches by meaning, then answers citing one file.
 	model := &scriptedModel{
-		calls: []llm.ToolCall{{Name: toolSearch, Input: []byte(`{"query":"fuel","limit":20}`)}},
-		final: `{"answer":"your last fill was at Shell","ids":["a"]}`,
+		calls: []llm.ToolCall{{Name: toolSearchByMeaning, Input: []byte(`{"query":"fuel","limit":20}`)}},
+		final: `{"answer":"your last fill was at Shell","fileIds":["a"]}`,
 	}
 	a, embedder, store, idx := newAgent(t, model)
 	vec := []float32{0.1, 0.2}
@@ -75,8 +75,8 @@ func TestAnswerRunsSearchAndReturnsCitedFiles(t *testing.T) {
 func TestAnswerFindByFactsFiltersByField(t *testing.T) {
 	// Arrange: the model filters by a metadata value.
 	model := &scriptedModel{
-		calls: []llm.ToolCall{{Name: toolFacts, Input: []byte(`{"contains":[{"field":"vendor","value":"shell"}]}`)}},
-		final: `{"answer":"","ids":["shell"]}`,
+		calls: []llm.ToolCall{{Name: toolFindByFacts, Input: []byte(`{"contains":[{"field":"vendor","value":"shell"}]}`)}},
+		final: `{"answer":"","fileIds":["shell"]}`,
 	}
 	a, _, _, idx := newAgent(t, model)
 	shell := domain.File{ID: "shell", OwnerID: "alice", Name: "s", Key: "files/shell", Meta: map[string]string{"vendor": "Shell"}}
@@ -99,8 +99,8 @@ func TestAnswerFindByFactsFiltersByField(t *testing.T) {
 func TestAnswerGetFileHidesAForeignOwner(t *testing.T) {
 	// Arrange: the model asks for a file that belongs to someone else.
 	model := &scriptedModel{
-		calls: []llm.ToolCall{{Name: toolGet, Input: []byte(`{"id":"secret"}`)}},
-		final: `{"answer":"I could not find that","ids":[]}`,
+		calls: []llm.ToolCall{{Name: toolGetFile, Input: []byte(`{"id":"secret"}`)}},
+		final: `{"answer":"I could not find that","fileIds":[]}`,
 	}
 	a, _, _, idx := newAgent(t, model)
 	idx.EXPECT().Get(gomock.Any(), "secret").Return(domain.File{ID: "secret", OwnerID: "mallory"}, nil)
@@ -116,7 +116,7 @@ func TestAnswerGetFileHidesAForeignOwner(t *testing.T) {
 
 func TestAnswerDropsACitedFileTheCallerDoesNotOwn(t *testing.T) {
 	// Arrange: the model cites an id whose record belongs to another owner.
-	model := &scriptedModel{final: `{"answer":"here","ids":["foreign"]}`}
+	model := &scriptedModel{final: `{"answer":"here","fileIds":["foreign"]}`}
 	a, _, _, idx := newAgent(t, model)
 	idx.EXPECT().Get(gomock.Any(), "foreign").Return(domain.File{ID: "foreign", OwnerID: "bob"}, nil)
 
@@ -131,7 +131,7 @@ func TestAnswerDropsACitedFileTheCallerDoesNotOwn(t *testing.T) {
 
 func TestAnswerPropagatesAToolError(t *testing.T) {
 	// Arrange: the search embedding fails, which the executor returns as an error.
-	model := &scriptedModel{calls: []llm.ToolCall{{Name: toolSearch, Input: []byte(`{"query":"x"}`)}}}
+	model := &scriptedModel{calls: []llm.ToolCall{{Name: toolSearchByMeaning, Input: []byte(`{"query":"x"}`)}}}
 	a, embedder, _, _ := newAgent(t, model)
 	embedder.EXPECT().Embed(gomock.Any(), "x").Return(nil, errors.New("bedrock down"))
 
@@ -156,8 +156,8 @@ func TestFindByFactsRespectsTheTimeBound(t *testing.T) {
 	jan := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
 	mar := time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC)
 	model := &scriptedModel{
-		calls: []llm.ToolCall{{Name: toolFacts, Input: []byte(`{"since":"2026-02-01T00:00:00Z"}`)}},
-		final: `{"answer":"","ids":[]}`,
+		calls: []llm.ToolCall{{Name: toolFindByFacts, Input: []byte(`{"since":"2026-02-01T00:00:00Z"}`)}},
+		final: `{"answer":"","fileIds":[]}`,
 	}
 	a, _, _, idx := newAgent(t, model)
 	old := domain.File{ID: "old", OwnerID: "alice", CreatedAt: jan}

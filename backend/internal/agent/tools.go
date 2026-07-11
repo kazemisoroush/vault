@@ -13,9 +13,9 @@ import (
 
 // Tool names the model calls.
 const (
-	toolSearch = "search_by_meaning"
-	toolFacts  = "find_by_facts"
-	toolGet    = "get_file"
+	toolSearchByMeaning = "search_by_meaning"
+	toolFindByFacts     = "find_by_facts"
+	toolGetFile         = "get_file"
 )
 
 // defaultLimit and maxLimit bound how many files a tool returns.
@@ -29,7 +29,7 @@ const (
 func tools() []llm.Tool {
 	return []llm.Tool{
 		{
-			Name:        toolSearch,
+			Name:        toolSearchByMeaning,
 			Description: "Find files by meaning. Give the text to search for and an optional limit.",
 			Schema: map[string]any{
 				"query": map[string]any{"type": "string", "description": "what to look for, in words"},
@@ -38,7 +38,7 @@ func tools() []llm.Tool {
 			Required: []string{"query"},
 		},
 		{
-			Name: toolFacts,
+			Name: toolFindByFacts,
 			Description: "Find files by their facts. A file matches when every pair's field contains its " +
 				"value, ignoring case. field is a metadata key or \"name\". Optionally bound the file's " +
 				"created time with since and until as RFC3339 dates.",
@@ -60,7 +60,7 @@ func tools() []llm.Tool {
 			},
 		},
 		{
-			Name:        toolGet,
+			Name:        toolGetFile,
 			Description: "Read one file by its id.",
 			Schema:      map[string]any{"id": map[string]any{"type": "string"}},
 			Required:    []string{"id"},
@@ -72,11 +72,11 @@ func tools() []llm.Tool {
 func (a *Agent) executor(ownerID string) llm.ToolExecutor {
 	return func(ctx context.Context, call llm.ToolCall) (string, error) {
 		switch call.Name {
-		case toolSearch:
+		case toolSearchByMeaning:
 			return a.runSearch(ctx, ownerID, call.Input)
-		case toolFacts:
+		case toolFindByFacts:
 			return a.runFacts(ctx, ownerID, call.Input)
-		case toolGet:
+		case toolGetFile:
 			return a.runGet(ctx, ownerID, call.Input)
 		default:
 			return "", fmt.Errorf("unknown tool %q", call.Name)
@@ -101,7 +101,7 @@ type searchInput struct {
 func (a *Agent) runSearch(ctx context.Context, ownerID string, raw json.RawMessage) (string, error) {
 	var in searchInput
 	if err := json.Unmarshal(raw, &in); err != nil {
-		return "", fmt.Errorf("decode %s input: %w", toolSearch, err)
+		return "", fmt.Errorf("decode %s input: %w", toolSearchByMeaning, err)
 	}
 	vector, err := a.embedder.Embed(ctx, in.Query)
 	if err != nil {
@@ -130,7 +130,7 @@ type factsInput struct {
 func (a *Agent) runFacts(ctx context.Context, ownerID string, raw json.RawMessage) (string, error) {
 	var in factsInput
 	if err := json.Unmarshal(raw, &in); err != nil {
-		return "", fmt.Errorf("decode %s input: %w", toolFacts, err)
+		return "", fmt.Errorf("decode %s input: %w", toolFindByFacts, err)
 	}
 	since := parseDate(in.Since)
 	until := parseDate(in.Until)
@@ -168,7 +168,7 @@ type getInput struct {
 func (a *Agent) runGet(ctx context.Context, ownerID string, raw json.RawMessage) (string, error) {
 	var in getInput
 	if err := json.Unmarshal(raw, &in); err != nil {
-		return "", fmt.Errorf("decode %s input: %w", toolGet, err)
+		return "", fmt.Errorf("decode %s input: %w", toolGetFile, err)
 	}
 	file, err := a.index.Get(ctx, in.ID)
 	if err != nil || file.OwnerID != ownerID {
