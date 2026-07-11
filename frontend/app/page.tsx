@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Answer } from "../components/Answer";
 import { AskBox } from "../components/AskBox";
 import { DropZone } from "../components/DropZone";
 import { FileList } from "../components/FileList";
-import { Results } from "../components/Results";
+import { Reply } from "../components/Reply";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { Trace } from "../components/Trace";
 import { Wordmark } from "../components/Wordmark";
@@ -17,7 +16,7 @@ import { useAuth } from "../lib/auth/context";
 import { listCalls } from "../lib/calls/listCalls";
 import type { LlmCall } from "../lib/calls/llmCall";
 import { deleteFile } from "../lib/files/deleteFile";
-import { dropFile } from "../lib/files/dropFile";
+import { dropFiles } from "../lib/files/dropFiles";
 import { listFiles } from "../lib/files/listFiles";
 import type { VaultFile } from "../lib/files/vaultFile";
 import { reportTimeToFile } from "../lib/metrics/reportTimeToFile";
@@ -28,7 +27,7 @@ export default function Home() {
   const { ready, authenticated, api, signOut } = useAuth();
   const router = useRouter();
   const [files, setFiles] = useState<VaultFile[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<AskOutcome | null>(null);
   const [asking, setAsking] = useState(false);
@@ -67,18 +66,24 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [authenticated, refresh, refreshCalls]);
 
-  const onFile = useCallback(
-    async (file: File) => {
+  const onFiles = useCallback(
+    async (chosen: File[]) => {
       if (!api) return;
-      setBusy(true);
       setError(null);
+      // Track files still in flight so the drop zone can count down as the queue drains.
+      setPending((count) => count + chosen.length);
       try {
-        await dropFile(api, file);
+        const { failed } = await dropFiles(api, chosen, () =>
+          setPending((count) => Math.max(0, count - 1)),
+        );
         await refresh();
+        if (failed.length > 0) {
+          const names = failed.map((f) => f.file.name).join(", ");
+          setError(failed.length === 1 ? `${names} did not upload` : `${failed.length} files did not upload: ${names}`);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "drop failed");
-      } finally {
-        setBusy(false);
+        setPending(0);
       }
     },
     [api, refresh],
@@ -144,19 +149,12 @@ export default function Home() {
       <p className="sub">Ask for anything, or drop a file to keep it.</p>
 
       <AskBox onAsk={onAsk} busy={asking} />
-      {outcome !== null && (
-        <>
-          {/* The answer's source is the first result: the model puts it first when it answers. */}
-          {outcome.answer && <Answer answer={outcome.answer} source={outcome.results[0]?.file.name} />}
-          <p className="eyebrow">{outcome.results.length === 1 ? "1 result" : `${outcome.results.length} results`}</p>
-          <Results results={outcome.results} />
-        </>
-      )}
+      {outcome !== null && <Reply outcome={outcome} />}
       {error && <p role="alert">{error}</p>}
 
       <p className="eyebrow">Keep something new</p>
       <div className="panel">
-        <DropZone onFile={onFile} busy={busy} />
+        <DropZone onFiles={onFiles} busy={pending > 0} pending={pending} />
         <FileList files={files} onDelete={onDelete} />
       </div>
 
