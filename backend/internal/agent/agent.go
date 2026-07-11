@@ -13,7 +13,8 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
-//go:generate go tool mockgen -source=agent.go -destination=mock/agent_mock.go -package=agentmock
+// ModelOp is the operation label the agent's model calls are tagged with on the trace.
+const ModelOp = "agent"
 
 // answerMaxTokens caps each model reply during the exchange.
 const answerMaxTokens = 1024
@@ -26,16 +27,6 @@ const maxRounds = 6
 type Result struct {
 	Text  string
 	Files []domain.File
-}
-
-// Answerer answers a query for one owner. The controller depends on this, not the concrete agent.
-type Answerer interface {
-	Answer(ctx context.Context, ownerID, query string) (Result, error)
-}
-
-// Converser runs one tool-using exchange with the model. The concrete *llm.Model satisfies it.
-type Converser interface {
-	Converse(ctx context.Context, c llm.Conversation) (string, error)
 }
 
 // Agent answers queries by driving the model over the vault's stores through its tools.

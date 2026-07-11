@@ -46,7 +46,7 @@ func main() {
 		log.Fatalf("configure vector store: %v", err)
 	}
 
-	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, "agent", recorder), embedder, vectorStore, idx)
+	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), embedder, vectorStore, idx)
 
 	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {

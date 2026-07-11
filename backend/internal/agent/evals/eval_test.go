@@ -54,13 +54,13 @@ func TestAgentEvalOffline(t *testing.T) {
 // TestAgentEvalBedrock runs the same golden cases against the real model on Bedrock. It is gated
 // behind VAULT_EVAL_BEDROCK because it needs credentials and spends tokens, so it never runs in CI.
 func TestAgentEvalBedrock(t *testing.T) {
-	if os.Getenv("VAULT_EVAL_BEDROCK") == "" {
-		t.Skip("set VAULT_EVAL_BEDROCK=1 to run the agent eval against Bedrock")
+	if os.Getenv(envEvalBedrock) == "" {
+		t.Skip("set " + envEvalBedrock + "=1 to run the agent eval against Bedrock")
 	}
 	model := llm.NewModel(
-		envOr("VAULT_BEDROCK_REGION", "us-east-1"),
-		envOr("VAULT_EVAL_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0"),
-		"eval",
+		envOr(envEvalRegion, defaultEvalRegion),
+		envOr(envEvalModel, defaultEvalModel),
+		evalModelOp,
 		noopRecorder{},
 	)
 

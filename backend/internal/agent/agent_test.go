@@ -172,3 +172,13 @@ func TestFindByFactsRespectsTheTimeBound(t *testing.T) {
 	assert.Contains(t, model.results[0], `"id":"recent"`)
 	assert.NotContains(t, model.results[0], `"id":"old"`)
 }
+
+func TestParseDateAcceptsRFC3339AndPlainDate(t *testing.T) {
+	// Arrange + Act + Assert: both a timestamp and a plain date parse to the same instant, and a
+	// bad value is treated as no bound.
+	want := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	assert.Equal(t, want, parseDate("2026-02-01T00:00:00Z"))
+	assert.Equal(t, want, parseDate("2026-02-01"))
+	assert.True(t, parseDate("not a date").IsZero())
+	assert.True(t, parseDate("").IsZero())
+}

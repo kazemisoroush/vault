@@ -41,7 +41,7 @@ func tools() []llm.Tool {
 			Name: toolFindByFacts,
 			Description: "Find files by their facts. A file matches when every pair's field contains its " +
 				"value, ignoring case. field is a metadata key or \"name\". Optionally bound the file's " +
-				"created time with since and until as RFC3339 dates.",
+				"created time with since and until, each an RFC3339 timestamp or a plain YYYY-MM-DD date.",
 			Schema: map[string]any{
 				"contains": map[string]any{
 					"type": "array",
@@ -248,15 +248,20 @@ func clampLimit(limit int) int {
 	return limit
 }
 
-// parseDate reads an RFC3339 date, returning the zero time when empty or unparseable, which the
-// caller treats as no bound.
+// dateLayouts are the date formats a since or until bound may use: a full RFC3339 timestamp, or a
+// plain calendar date, since the model often gives the latter.
+var dateLayouts = []string{time.RFC3339, "2006-01-02"}
+
+// parseDate reads a date bound in any of the accepted layouts, returning the zero time when empty
+// or unparseable, which the caller treats as no bound.
 func parseDate(value string) time.Time {
 	if value == "" {
 		return time.Time{}
 	}
-	parsed, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		return time.Time{}
+	for _, layout := range dateLayouts {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.UTC()
+		}
 	}
-	return parsed
+	return time.Time{}
 }

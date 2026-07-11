@@ -16,6 +16,21 @@ import (
 //go:embed cases/*.json
 var caseFS embed.FS
 
+// Configuration for the Bedrock eval, read from the environment so it can run against a chosen
+// region and model without code changes.
+const (
+	// evalModelOp tags the eval's model calls on the trace.
+	evalModelOp = "eval"
+	// envEvalBedrock gates the Bedrock eval; it runs only when this is set.
+	envEvalBedrock = "VAULT_EVAL_BEDROCK"
+	// envEvalRegion and envEvalModel override the Bedrock region and model.
+	envEvalRegion = "VAULT_BEDROCK_REGION"
+	envEvalModel  = "VAULT_EVAL_MODEL"
+	// defaultEvalRegion and defaultEvalModel are used when the overrides are unset.
+	defaultEvalRegion = "us-east-1"
+	defaultEvalModel  = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+)
+
 // Case is one golden eval: a seeded vault, the question, a scripted tool run for the offline
 // model, and the assertions the answer must meet. The real-model runner ignores Script.
 type Case struct {
@@ -106,7 +121,8 @@ func seed(idx *fakeIndex, vectors *fakeVectors, embedder fakeEmbedder, c Case) e
 }
 
 // caseDate reads a file's own date from its metadata, so date-range filters have something to
-// match. An absent or unparseable date leaves the created time zero, which no bound rejects.
+// match. An absent or unparseable date leaves the created time zero. A since bound would then drop
+// the file, so a case that filters by since must give its files a date.
 func caseDate(meta map[string]string) time.Time {
 	parsed, err := time.Parse("2006-01-02", meta["date"])
 	if err != nil {
