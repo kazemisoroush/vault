@@ -249,89 +249,177 @@ body {
   color: var(--muted);
 }
 
-/* Answer */
-.answer {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  border-radius: 14px;
-  padding: 16px 18px;
-  margin-bottom: 12px;
-}
-
-.answer-text {
-  margin: 0;
-  font-size: 18px;
-  line-height: 1.4;
-  font-weight: 550;
-  color: var(--ink);
-  word-break: break-word;
-}
-
-.answer-source {
-  margin: 7px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-
-/* Results */
-.results {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.result {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  padding: 12px 15px;
+/* Reply: the grounded answer over the files it was drawn from */
+.reply {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 22px 18px;
+  margin-bottom: 12px;
+  overflow: hidden;
 }
 
-.result:hover {
-  border-color: var(--accent);
+.reply::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(var(--accent), var(--accent-strong));
 }
 
-.filetype {
-  width: 34px;
-  height: 34px;
+.reply-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.reply .mark {
+  width: 22px;
+  height: 22px;
   flex: none;
-  border-radius: 8px;
   display: grid;
   place-items: center;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.reply .label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.reply .grow {
+  flex: 1;
+}
+
+.reply .foundcount {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.copy {
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 9px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.copy:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.prose {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 20px;
+  line-height: 1.42;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: -0.005em;
+  word-break: break-word;
+}
+
+.grounded {
+  margin-top: 15px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.glabel {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  font-weight: 600;
+  margin-bottom: 9px;
+}
+
+.sources {
+  display: grid;
+  gap: 7px;
+}
+
+.source {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.14s ease,
+    transform 0.14s ease;
+}
+
+.source:hover {
+  border-color: var(--accent);
+  transform: translateX(2px);
+}
+
+.tag {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
   background: var(--accent-soft);
   color: var(--accent);
   font-family: var(--font-mono), monospace;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.result .body {
+.sname {
   flex: 1;
   min-width: 0;
-}
-
-.result .body a {
-  color: var(--ink);
-  text-decoration: none;
   font-weight: 550;
-}
-
-.result .body a:hover {
-  color: var(--accent);
-}
-
-.result .why {
-  font-size: 13px;
-  color: var(--muted);
+  font-size: 14.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.smeta {
+  color: var(--faint);
+  font-size: 12px;
+  margin-left: 6px;
+  font-weight: 400;
+}
+
+.source .open {
+  flex: none;
+  color: var(--faint);
+  font-size: 15px;
+}
+
+.source:hover .open {
+  color: var(--accent);
 }
 
 /* Drop + files */
@@ -365,6 +453,23 @@ body {
   width: 24px;
   height: 24px;
   color: var(--faint);
+}
+
+.dropzone .spinner {
+  color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropzone .spinner {
+    animation: none;
+  }
 }
 
 .dropzone strong {

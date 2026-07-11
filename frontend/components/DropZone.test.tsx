@@ -5,25 +5,27 @@ import { describe, expect, it, vi } from "vitest";
 import { DropZone } from "./DropZone";
 
 describe("DropZone", () => {
-  it("hands a picked file to onFile", async () => {
+  it("hands every picked file to onFiles", async () => {
     // Arrange
-    const onFile = vi.fn();
-    render(<DropZone onFile={onFile} busy={false} />);
-    const file = new File(["hi"], "a.txt", { type: "text/plain" });
+    const onFiles = vi.fn();
+    render(<DropZone onFiles={onFiles} busy={false} />);
+    const a = new File(["a"], "a.txt", { type: "text/plain" });
+    const b = new File(["b"], "b.txt", { type: "text/plain" });
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     // Act
-    await userEvent.upload(input, file);
+    await userEvent.upload(input, [a, b]);
 
     // Assert
-    expect(onFile).toHaveBeenCalledWith(file);
+    expect(onFiles).toHaveBeenCalledWith([a, b]);
   });
 
-  it("shows the uploading state while busy", () => {
+  it("shows the uploading count and a spinner while busy", () => {
     // Arrange + Act
-    render(<DropZone onFile={() => {}} busy={true} />);
+    render(<DropZone onFiles={() => {}} busy={true} pending={3} />);
 
     // Assert
-    expect(screen.getByText(/uploading/i)).toBeInTheDocument();
+    expect(screen.getByText(/uploading 3/i)).toBeInTheDocument();
+    expect(document.querySelector(".spinner")).toBeInTheDocument();
   });
 });
