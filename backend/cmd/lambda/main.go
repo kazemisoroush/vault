@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
+	"github.com/kazemisoroush/vault/backend/internal/agent"
 	"github.com/kazemisoroush/vault/backend/internal/api"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/calls"
@@ -20,7 +21,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
-	"github.com/kazemisoroush/vault/backend/internal/retrieve"
+	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
 	"github.com/kazemisoroush/vault/backend/internal/transport"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
@@ -49,12 +50,9 @@ func main() {
 		log.Fatalf("configure vector store: %v", err)
 	}
 
-	retriever, err := retrieve.NewClaudeRetriever(ctx, cfg.BedrockRegion, cfg.RerankModel, recorder)
-	if err != nil {
-		log.Fatalf("configure retriever: %v", err)
-	}
+	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), embedder, vectorStore, idx)
 
-	apiHandler, err := api.New(ctx, cfg, idx, blobs, embedder, vectorStore, retriever, recorder, telemetry.NewEMFEmitter(os.Stdout))
+	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}
@@ -64,8 +62,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure extractor: %v", err)
 	}
-	ingester := ingest.New(idx, blobs, extractor, embedder, vectorStore)
+	ingester := ingest.NewHandler(idx, blobs, extractor, embedder, vectorStore)
 
-	adapter := transport.New(proxy, ingester)
+	adapter := transport.NewTransport(proxy, ingester)
 	lambda.Start(adapter.Handle)
 }

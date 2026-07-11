@@ -60,7 +60,7 @@ func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
-	h := ingest.New(idx, blobs, extractor, embedder, store)
+	h := ingest.NewHandler(idx, blobs, extractor, embedder, store)
 
 	// Act
 	err := h.Handle(context.Background(), s3Event(staging))
@@ -97,7 +97,7 @@ func TestSettleExtractionFailsMarksFailedAndCleansUp(t *testing.T) {
 	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
-	h := ingest.New(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+	h := ingest.NewHandler(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event(staging))
@@ -117,7 +117,7 @@ func TestSettleReadErrorIsReturned(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: "uploads/upl-1"}, nil)
 	blobs.EXPECT().Get(gomock.Any(), "uploads/upl-1").Return(nil, "", errors.New("s3 down"))
 
-	h := ingest.New(idx, blobs, mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+	h := ingest.NewHandler(idx, blobs, mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
@@ -132,7 +132,7 @@ func TestSettleAlreadySettledIsNoOp(t *testing.T) {
 	idx := mocks.NewMockIndex(ctrl)
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{}, index.ErrNotFound)
 
-	h := ingest.New(idx, mocks.NewMockStore(ctrl), mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl), mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
@@ -147,7 +147,7 @@ func TestSettleGetErrorIsReturned(t *testing.T) {
 	idx := mocks.NewMockIndex(ctrl)
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{}, errors.New("dynamo down"))
 
-	h := ingest.New(idx, mocks.NewMockStore(ctrl), mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl), mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))

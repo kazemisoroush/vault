@@ -1,0 +1,14 @@
+{
+  "name": "turkiye_ticket",
+  "query": "the ticket for the Turkiye trip",
+  "owner": "alice",
+  "files": [
+    {"id": "t", "name": "turkiye ticket.pdf", "meta": {"event": "Turkiye trip", "document type": "flight ticket"}},
+    {"id": "g", "name": "grocery.jpg", "meta": {"vendor": "Coles", "document type": "receipt"}}
+  ],
+  "script": {
+    "calls": [{"name": "search_by_meaning", "input": {"query": "Turkiye trip ticket", "limit": 20}}],
+    "final": "{\"answer\":\"\",\"fileIds\":[\"t\"]}"
+  },
+  "expect": {"fileIds": ["t"], "answerContains": []}
+}

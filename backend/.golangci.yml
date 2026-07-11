@@ -2,3 +2,11 @@ version: "2"
 linters:
   enable:
     - wrapcheck
+    - forbidigo
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: '^\w+\.New$'
+          pkg: '^github\.com/kazemisoroush/'
+          msg: "Constructors must be named explicitly for what they build (e.g. NewHandler, NewAgent), not a bare New."

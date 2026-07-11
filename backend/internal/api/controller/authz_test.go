@@ -12,10 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/kazemisoroush/vault/backend/internal/agent"
+	agentmock "github.com/kazemisoroush/vault/backend/internal/agent/mock"
 	"github.com/kazemisoroush/vault/backend/internal/auth"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
-	"github.com/kazemisoroush/vault/backend/internal/retrieve"
 )
 
 // withOwner returns the request carrying an authenticated owner, as the auth middleware would.
@@ -73,38 +74,27 @@ func TestListScopesToTheCaller(t *testing.T) {
 	// Assert: passing the owner to the index is the whole point; a nil return is fine.
 }
 
-func TestAskExcludesOtherOwnersFiles(t *testing.T) {
-	// Arrange: the vector store returns files from two owners; only alice's may reach the model.
+func TestAskPassesTheCallersOwnerToTheAgent(t *testing.T) {
+	// Arrange: the controller must hand the agent the authenticated caller, since every store
+	// query the agent runs is scoped to that owner. The scoping itself is tested in the agent.
 	ctrl := gomock.NewController(t)
-	idx := mocks.NewMockIndex(ctrl)
+	answerer := agentmock.NewMockAnswerer(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
-	store := mocks.NewMockVectorStore(ctrl)
-	embedder := mocks.NewMockEmbedder(ctrl)
-	retriever := mocks.NewMockRetriever(ctrl)
-	c := NewAskController(idx, blobs, embedder, store, retriever)
+	c := NewAskController(answerer, blobs)
 
-	embedder.EXPECT().Embed(gomock.Any(), "invoice").Return([]float32{0.1}, nil)
-	// The vector store filters to alice in the query itself, so bob's vector never comes back.
-	store.EXPECT().Query(gomock.Any(), "alice", gomock.Any(), gomock.Any()).Return([]string{"mine"}, nil)
-	idx.EXPECT().Get(gomock.Any(), "mine").Return(domain.File{ID: "mine", OwnerID: "alice", Key: "files/mine"}, nil)
-
-	var shortlist []domain.File
-	retriever.EXPECT().Match(gomock.Any(), "invoice", gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, files []domain.File) (retrieve.Answer, error) {
-			shortlist = files
-			return retrieve.Answer{IDs: []string{"mine"}}, nil
+	var gotOwner string
+	answerer.EXPECT().Answer(gomock.Any(), "alice", "invoice").DoAndReturn(
+		func(_ context.Context, ownerID, _ string) (agent.Result, error) {
+			gotOwner = ownerID
+			return agent.Result{}, nil
 		})
-	blobs.EXPECT().PresignGet(gomock.Any(), "files/mine", gomock.Any()).Return("https://dl", nil)
-
 	req := withOwner(httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(`{"query":"invoice"}`)), "alice")
 	rec := httptest.NewRecorder()
 
 	// Act
 	c.Ask(rec, req)
 
-	// Assert: the query was scoped to alice, so only her file reached the model and the results.
+	// Assert
 	require.Equal(t, http.StatusOK, rec.Code)
-	require.Len(t, shortlist, 1)
-	assert.Equal(t, "mine", shortlist[0].ID)
-	assert.NotContains(t, rec.Body.String(), "theirs")
+	assert.Equal(t, "alice", gotOwner)
 }

@@ -134,8 +134,10 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 	})
 
 	fn := golambda.NewGoFunction(stack, jsii.String("Api"), &golambda.GoFunctionProps{
-		Entry:   jsii.String("../backend/cmd/lambda"),
-		Timeout: awscdk.Duration_Seconds(jsii.Number(30)),
+		Entry: jsii.String("../backend/cmd/lambda"),
+		// The ask agent runs several model calls in one request as it queries and answers, so it
+		// needs more than the default headroom.
+		Timeout: awscdk.Duration_Seconds(jsii.Number(120)),
 		Environment: &map[string]*string{
 			"VAULT_TABLE":          table.TableName(),
 			"VAULT_BUCKET":         bucket.BucketName(),

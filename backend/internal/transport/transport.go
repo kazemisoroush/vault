@@ -18,8 +18,8 @@ type Transport struct {
 	ingester Ingester
 }
 
-// New builds a Transport over the HTTP proxy and the ingester.
-func New(proxy Proxy, ingester Ingester) *Transport {
+// NewTransport builds a Transport over the HTTP proxy and the ingester.
+func NewTransport(proxy Proxy, ingester Ingester) *Transport {
 	return &Transport{proxy: proxy, ingester: ingester}
 }
 
