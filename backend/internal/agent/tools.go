@@ -18,11 +18,11 @@ const (
 	toolGetFile         = "get_file"
 )
 
-// defaultLimit and maxLimit bound how many files a tool returns.
+// defaultFileLimit and maxFileLimit bound how many files a tool returns.
 const (
-	defaultLimit = 20
-	maxLimit     = 50
-	listPageSize = int32(100)
+	defaultFileLimit = 20
+	maxFileLimit     = 50
+	listPageSize     = int32(100)
 )
 
 // tools declares the query tools the model may call.
@@ -240,10 +240,10 @@ func marshalViews(files []domain.File) (string, error) {
 // clampLimit keeps a requested limit within sane bounds, defaulting when unset.
 func clampLimit(limit int) int {
 	if limit <= 0 {
-		return defaultLimit
+		return defaultFileLimit
 	}
-	if limit > maxLimit {
-		return maxLimit
+	if limit > maxFileLimit {
+		return maxFileLimit
 	}
 	return limit
 }
