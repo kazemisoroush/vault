@@ -23,7 +23,7 @@ const (
 // redrive the work later rather than treat it as terminal.
 type RetryableError struct{ err error }
 
-// NewRetryableError wraps err as retryable. send uses it; callers may also use it in tests.
+// NewRetryableError wraps err as retryable, so send can flag a transient failure for its caller.
 func NewRetryableError(err error) *RetryableError { return &RetryableError{err: err} }
 
 // Error returns the underlying message.

@@ -19,7 +19,6 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
-	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
@@ -80,12 +79,10 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
 
 	meta, err := h.extractor.Extract(ctx, content, contentType)
 	if err != nil {
-		var retry *llm.RetryableError
-		if errors.As(err, &retry) {
-			// The model is throttled or briefly unavailable and stayed so through its own
-			// retries. Leave the pending record and staging object untouched and fail the
-			// invocation, so the S3 event is redriven later instead of losing the file to a
-			// terminal failed state.
+		if errors.Is(err, extract.ErrRetryable) {
+			// Extraction is throttled or briefly unavailable. Leave the pending record and
+			// staging object untouched and fail the invocation, so the S3 event is redriven
+			// later instead of losing the file to a terminal failed state.
 			log.Printf("extraction throttled for %s, will retry: %v", hash, err)
 			return fmt.Errorf("extract %s: %w", hash, err)
 		}

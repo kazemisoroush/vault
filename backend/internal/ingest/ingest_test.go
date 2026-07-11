@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -13,9 +14,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/kazemisoroush/vault/backend/internal/domain"
+	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
-	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
@@ -122,7 +123,7 @@ func TestSettleRetryableExtractionRedrivesAndKeepsPending(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: staging, Status: domain.StatusPending}, nil)
 	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
 	blobs.EXPECT().Copy(gomock.Any(), staging, "files/"+hash).Return(nil)
-	extractor.EXPECT().Extract(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, llm.NewRetryableError(errors.New("429 throttled")))
+	extractor.EXPECT().Extract(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("bedrock extract: %w: throttled", extract.ErrRetryable))
 	// No Put, no Delete: the record stays pending and staging is kept so the event can redrive.
 
 	h := ingest.NewHandler(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))

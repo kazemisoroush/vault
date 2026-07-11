@@ -2,6 +2,7 @@ package extract
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"strings"
@@ -37,13 +38,24 @@ func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentTy
 		MaxTokens: maxTokens,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("bedrock extract: %w", err)
+		return nil, wrapExtractError(err)
 	}
 
 	// Merge the model's metadata over the file's own embedded metadata, treating a declined reply as none.
 	result := embeddedMeta(content, contentType)
 	maps.Copy(result, metaFromReply(reply))
 	return result, nil
+}
+
+// wrapExtractError tags a transient model failure, such as throttling, as ErrRetryable so a caller
+// can redrive it, while a terminal failure is returned as an ordinary error. This keeps the model's
+// own retryable signal from leaking past the extract seam.
+func wrapExtractError(err error) error {
+	var retry *llm.RetryableError
+	if errors.As(err, &retry) {
+		return fmt.Errorf("bedrock extract: %w: %w", ErrRetryable, err)
+	}
+	return fmt.Errorf("bedrock extract: %w", err)
 }
 
 // fileBlock wraps the bytes as the content part that fits the content type, decoding office
