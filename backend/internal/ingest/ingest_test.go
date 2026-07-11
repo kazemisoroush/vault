@@ -15,6 +15,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
+	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
@@ -106,6 +107,31 @@ func TestSettleExtractionFailsMarksFailedAndCleansUp(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, hash, saved.ID)
 	assert.Equal(t, domain.StatusFailed, saved.Status)
+}
+
+func TestSettleRetryableExtractionRedrivesAndKeepsPending(t *testing.T) {
+	// Arrange: extraction is throttled and stays so through the model retries.
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	blobs := mocks.NewMockStore(ctrl)
+	extractor := mocks.NewMockExtractor(ctrl)
+
+	content := []byte("the file bytes")
+	hash := hashOf(content)
+	staging := "uploads/upl-1"
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: staging, Status: domain.StatusPending}, nil)
+	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
+	blobs.EXPECT().Copy(gomock.Any(), staging, "files/"+hash).Return(nil)
+	extractor.EXPECT().Extract(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, llm.NewRetryableError(errors.New("429 throttled")))
+	// No Put, no Delete: the record stays pending and staging is kept so the event can redrive.
+
+	h := ingest.NewHandler(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+
+	// Act
+	err := h.Handle(context.Background(), s3Event(staging))
+
+	// Assert: the invocation fails so Lambda retries the event later, and nothing was settled.
+	require.Error(t, err)
 }
 
 func TestSettleReadErrorIsReturned(t *testing.T) {
