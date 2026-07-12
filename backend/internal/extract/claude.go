@@ -48,12 +48,13 @@ func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentTy
 }
 
 // wrapExtractError tags a transient model failure, such as throttling, as ErrRetryable so a caller
-// can redrive it, while a terminal failure is returned as an ordinary error. This keeps the model's
-// own retryable signal from leaking past the extract seam.
+// can redrive it, while a terminal failure is returned as an ordinary error. The model's own error
+// is kept only as text (%v, not %w), so its type does not leak past the extract seam; callers match
+// on ErrRetryable alone.
 func wrapExtractError(err error) error {
 	var retry *llm.RetryableError
 	if errors.As(err, &retry) {
-		return fmt.Errorf("bedrock extract: %w: %w", ErrRetryable, err)
+		return fmt.Errorf("bedrock extract: %w: %v", ErrRetryable, err)
 	}
 	return fmt.Errorf("bedrock extract: %w", err)
 }
