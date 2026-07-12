@@ -101,3 +101,40 @@ func TestSplitEllipsisIsOneBoundary(t *testing.T) {
 	require.Len(t, claims, 2)
 	assert.Equal(t, "He hesitated...", claims[0].Text)
 }
+
+func TestSplitEgAndIeStayInsideTheSentence(t *testing.T) {
+	// Arrange: the first dot of a dotted abbreviation used to split "e." / "g. …".
+	text := "The parties agreed, e.g. in cl. 3, to arbitrate. The venue was Sydney."
+
+	// Act
+	claims := split(text)
+
+	// Assert
+	require.Len(t, claims, 2)
+	assert.Equal(t, "The parties agreed, e.g. in cl. 3, to arbitrate.", claims[0].Text)
+}
+
+func TestSplitDecimalGuardDoesNotReachAcrossASpace(t *testing.T) {
+	// Arrange: a digit after ". " starts a new sentence; only an immediate digit is a decimal.
+	text := "The tenant paid $40,000. 14 days later the keys were returned."
+
+	// Act
+	claims := split(text)
+
+	// Assert
+	require.Len(t, claims, 2)
+	assert.Equal(t, "The tenant paid $40,000.", claims[0].Text)
+}
+
+func TestSplitTypographicClosingQuoteStaysAttached(t *testing.T) {
+	// Arrange: a curly closing quote is multi-byte and must not start the next claim.
+	text := "He wrote \u201cthe funds cleared on 2 March.\u201d Then he resigned."
+
+	// Act
+	claims := split(text)
+
+	// Assert
+	require.Len(t, claims, 2)
+	assert.Equal(t, "He wrote \u201cthe funds cleared on 2 March.\u201d", claims[0].Text)
+	assert.Equal(t, "Then he resigned.", claims[1].Text)
+}

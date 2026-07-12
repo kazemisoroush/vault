@@ -13,11 +13,11 @@ const (
 // Claim verdict values, in precedence order. Disputed outranks everything: presenting a green
 // while knowingly holding contradicting evidence would be lying by omission. Verified means a
 // reference restates the claim and code confirmed it character for character; review means
-// reworded support was found and a human decides; unsupported means the search came back empty,
-// which is silence, not falsehood.
+// reworded support was found and a human decides; unsupported means no supporting span was
+// confirmed, whether the search came back empty or the gate discarded what the model proposed.
 const (
-	VerdictVerified    = "verified"
 	VerdictDisputed    = "disputed"
+	VerdictVerified    = "verified"
 	VerdictReview      = "review"
 	VerdictUnsupported = "unsupported"
 )

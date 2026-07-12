@@ -17,6 +17,16 @@ import (
 // candidateLimit is how many of the owner's files the judge sees per claim.
 const candidateLimit = int32(3)
 
+// maxClaims bounds how many sentences one check may spend model calls on. The API's character
+// limit admits pathological inputs of thousands of tiny sentences; past this cap the check is
+// marked failed rather than driving an unbounded run of Bedrock calls.
+const maxClaims = 500
+
+// maxStoredRefs bounds how many references one claim persists. The cap is applied after the
+// gate and after the verdict, with contradictions kept first, so truncation can never change
+// or hide what the verdict weighed.
+const maxStoredRefs = 5
+
 // Runner drives one check through its pipeline: split into claims, find candidate files, judge
 // each claim, and let the gate decide the verdict. The model proposes; the gate disposes.
 type Runner struct {
@@ -83,6 +93,9 @@ func (r *Runner) Run(ctx context.Context, checkID string, ownerID string) error 
 // coverage is total by construction and the pipeline's first model call is the judge.
 func (r *Runner) run(ctx context.Context, check *domain.Check) error {
 	claims := split(check.Text)
+	if len(claims) > maxClaims {
+		return fmt.Errorf("check has %d sentences, over the %d cap", len(claims), maxClaims)
+	}
 
 	for i := range claims {
 		if err := ctx.Err(); err != nil {
@@ -112,12 +125,34 @@ func (r *Runner) decide(ctx context.Context, ownerID string, claim *domain.Claim
 		return
 	}
 
+	refs := make([]domain.Reference, 0, len(findings))
 	for _, f := range findings {
 		if ref, ok := r.gateFinding(claim, f, candidates); ok {
-			claim.References = append(claim.References, ref)
+			refs = append(refs, ref)
 		}
 	}
-	claim.Verdict = verdictFor(claim.References)
+	claim.Verdict = verdictFor(refs)
+	claim.References = capRefs(refs)
+}
+
+// capRefs bounds the persisted references, keeping every contradiction first: a truncated
+// reference list must still show the evidence that disputed the claim.
+func capRefs(refs []domain.Reference) []domain.Reference {
+	if len(refs) <= maxStoredRefs {
+		return refs
+	}
+	kept := make([]domain.Reference, 0, maxStoredRefs)
+	for _, ref := range refs {
+		if ref.Relation == domain.RelationContradicts && len(kept) < maxStoredRefs {
+			kept = append(kept, ref)
+		}
+	}
+	for _, ref := range refs {
+		if ref.Relation != domain.RelationContradicts && len(kept) < maxStoredRefs {
+			kept = append(kept, ref)
+		}
+	}
+	return kept
 }
 
 // gateFinding turns one judge finding into a persisted reference, or rejects it. The gate:

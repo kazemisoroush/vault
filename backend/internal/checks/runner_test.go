@@ -208,3 +208,28 @@ func TestRunExpiredDeadlineMarksCheckFailed(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, []string{domain.CheckRunning, domain.CheckFailed}, statuses)
 }
+
+func TestRunContradictionBeyondStorageCapStillDisputes(t *testing.T) {
+	// Arrange: six findings, five paraphrases then one contradiction. The verdict must weigh
+	// ALL gated findings (disputed), and the stored references must keep the contradiction
+	// even though the list is capped.
+	claim := "The deposit of $40,000 was payable within seven days."
+	findings := `[
+	  {"fileId": "file-1", "span": "The contract was executed on 14 February 2023", "relation": "paraphrase"},
+	  {"fileId": "file-1", "span": "The deposit of $40,000", "relation": "paraphrase"},
+	  {"fileId": "file-1", "span": "payable within seven days", "relation": "paraphrase"},
+	  {"fileId": "file-1", "span": "executed on 14 February", "relation": "paraphrase"},
+	  {"fileId": "file-1", "span": "14 February 2023", "relation": "paraphrase"},
+	  {"fileId": "file-2", "span": "the deposit was not paid within seven days", "relation": "contradicts"}]`
+	runner, check := newRunnerFixture(t, claim, findings)
+
+	// Act
+	require.NoError(t, runner.Run(context.Background(), "chk-1", "alice"))
+
+	// Assert
+	require.Len(t, check.Claims, 1)
+	got := check.Claims[0]
+	assert.Equal(t, domain.VerdictDisputed, got.Verdict)
+	require.Len(t, got.References, 5, "stored references are capped")
+	assert.Equal(t, domain.RelationContradicts, got.References[0].Relation, "the contradiction is kept first")
+}

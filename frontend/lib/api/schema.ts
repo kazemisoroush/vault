@@ -258,7 +258,7 @@ export interface components {
             start: number;
             end: number;
             /**
-             * @description Verified means a reference restates the claim and code confirmed it character for character. Disputed outranks verified: the record holds contradicting evidence, and both sides are in references. Review means reworded support awaits a human. Unsupported means the search came back empty, which is silence, not falsehood.
+             * @description Verified means a reference restates the claim and code confirmed it character for character. Disputed outranks verified: the record holds contradicting evidence, and both sides are in references. Review means reworded support awaits a human. Unsupported means no supporting span was confirmed, whether the search came back empty or the model's proposals were discarded by the gate; silence, not falsehood.
              * @enum {string}
              */
             verdict: "verified" | "disputed" | "review" | "unsupported";

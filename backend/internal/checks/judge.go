@@ -25,10 +25,6 @@ const judgeMaxTokens = 2048
 // maxDocChars bounds each candidate document's text in the judge prompt.
 const maxDocChars = 30000
 
-// maxFindings bounds how many judge findings one claim keeps, so a runaway reply cannot bloat
-// the stored check.
-const maxFindings = 5
-
 // candidate is one document offered to the judge.
 type candidate struct {
 	FileID   string
@@ -89,8 +85,7 @@ func parseFindings(reply string) []finding {
 	if err := json.Unmarshal([]byte(reply[start:end+1]), &findings); err != nil {
 		return nil
 	}
-	if len(findings) > maxFindings {
-		findings = findings[:maxFindings]
-	}
+	// Every parsed finding goes to the gate; capping happens after gating and after the
+	// verdict, so a contradiction can never be truncated away before it is weighed.
 	return findings
 }
