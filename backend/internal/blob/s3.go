@@ -1,6 +1,7 @@
 package blob
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -51,6 +52,20 @@ func (s *S3Store) PresignGet(ctx context.Context, key string, expiry time.Durati
 	}
 
 	return req.URL, nil
+}
+
+// Put writes bytes to a key with the given content type, overwriting any existing object.
+func (s *S3Store) Put(ctx context.Context, key string, contentType string, content []byte) error {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+		Body:        bytes.NewReader(content),
+	})
+	if err != nil {
+		return fmt.Errorf("put object %q: %w", key, err)
+	}
+	return nil
 }
 
 // Get reads an object's bytes and content type from the bucket.
