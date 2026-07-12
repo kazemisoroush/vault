@@ -47,7 +47,11 @@ func NewClaudeExtractor(_ context.Context, region, model string, recorder llm.Re
 // in the same call that extracts their metadata.
 func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentType string) (Extraction, error) {
 	if needsTranscription(contentType) {
-		return e.extractTranscribing(ctx, content, contentType)
+		extraction, err := e.extractTranscribing(ctx, content, contentType)
+		if err != nil {
+			return Extraction{}, fmt.Errorf("extract with transcription: %w", err)
+		}
+		return extraction, nil
 	}
 
 	text := deterministicText(content, contentType)
@@ -84,7 +88,11 @@ func (e *ClaudeExtractor) extractTranscribing(ctx context.Context, content []byt
 
 	meta, text, ok := transcriptionFromReply(reply)
 	if !ok {
-		return e.extractMetaOnly(ctx, content, contentType)
+		extraction, err := e.extractMetaOnly(ctx, content, contentType)
+		if err != nil {
+			return Extraction{}, fmt.Errorf("metadata-only fallback: %w", err)
+		}
+		return extraction, nil
 	}
 	result := embeddedMeta(content, contentType)
 	maps.Copy(result, meta)
