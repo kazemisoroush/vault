@@ -70,7 +70,7 @@ func (m *Model) send(ctx context.Context, label string, params anthropic.Message
 			break
 		}
 		if err := m.sleep(ctx, backoff(attempt, m.baseDelay, m.maxDelay)); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("retry aborted: %w", err)
 		}
 	}
 	if retryable(lastErr) {

@@ -107,14 +107,14 @@ func seed(idx *fakeIndex, vectors *fakeVectors, embedder fakeEmbedder, c Case) e
 			CreatedAt: caseDate(cf.Meta),
 		}
 		if err := idx.Put(ctx, file); err != nil {
-			return err
+			return fmt.Errorf("index case file %q: %w", cf.ID, err)
 		}
 		vector, err := embedder.Embed(ctx, file.SearchText())
 		if err != nil {
-			return err
+			return fmt.Errorf("embed case file %q: %w", cf.ID, err)
 		}
 		if err := vectors.Put(ctx, file.ID, c.Owner, vector); err != nil {
-			return err
+			return fmt.Errorf("store vector for case file %q: %w", cf.ID, err)
 		}
 	}
 	return nil

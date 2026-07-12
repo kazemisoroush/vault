@@ -10,3 +10,17 @@ linters:
         - pattern: '^\w+\.New$'
           pkg: '^github\.com/kazemisoroush/'
           msg: "Constructors must be named explicitly for what they build (e.g. NewHandler, NewAgent), not a bare New."
+    wrapcheck:
+      # Also require wrapping errors returned from other functions in this module, not just from
+      # third-party packages, so a bare `return err` never loses the call-site context.
+      report-internal-errors: true
+      # wrapExtractError already returns a wrapped error (it is the extract seam's error producer),
+      # so a caller need not wrap it again. extra-ignore-sigs appends to wrapcheck's defaults.
+      extra-ignore-sigs:
+        - wrapExtractError(
+  exclusions:
+    rules:
+      # Wrapping errors inside test helpers adds noise without aiding debugging.
+      - path: _test\.go
+        linters:
+          - wrapcheck
