@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -48,7 +49,8 @@ func (c *CheckController) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "text is required")
 		return
 	}
-	if len(req.Text) > maxCheckChars {
+	// The contract promises a character limit, so count runes, not bytes.
+	if utf8.RuneCountInString(req.Text) > maxCheckChars {
 		writeError(w, http.StatusBadRequest, "text is too long to check in one go")
 		return
 	}
@@ -69,6 +71,13 @@ func (c *CheckController) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := c.enqueuer.Enqueue(r.Context(), check.ID, check.OwnerID); err != nil {
 		log.Printf("enqueue check %s: %v", check.ID, err)
+		// The stored record must not sit pending forever when no worker is coming, so it is
+		// marked failed best-effort before the error goes back to the caller.
+		check.Status = domain.CheckFailed
+		check.UpdatedAt = c.now().UTC()
+		if saveErr := c.store.Put(r.Context(), check); saveErr != nil {
+			log.Printf("mark unenqueued check %s failed: %v", check.ID, saveErr)
+		}
 		writeError(w, http.StatusInternalServerError, "could not start the check")
 		return
 	}

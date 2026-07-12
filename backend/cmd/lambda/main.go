@@ -59,7 +59,7 @@ func main() {
 	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
 	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
 	runner := checks.NewRunner(checkStore, idx, blobs, embedder, vectorStore, checkModel)
-	enqueuer := checks.NewLambdaEnqueuer(lambdasvc.NewFromConfig(awsCfg), os.Getenv("AWS_LAMBDA_FUNCTION_NAME"))
+	enqueuer := checks.NewLambdaEnqueuer(lambdasvc.NewFromConfig(awsCfg), cfg.FunctionName)
 
 	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {

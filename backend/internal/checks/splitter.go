@@ -2,6 +2,7 @@ package checks
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,17 +12,18 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
-// splitInstruction asks the model to break the text into atomic claims. Each claim must be a
-// verbatim substring of the input, so the backend can locate its offsets deterministically
-// instead of trusting model-produced numbers.
-const splitInstruction = `Split the text below into atomic factual claims, one checkable assertion each.
-A sentence carrying two facts becomes two claims. COPY each claim exactly, character for
-character, as it appears in the text; never rephrase, merge, or correct. Skip headings,
-greetings, and sentences that assert nothing. Return ONLY a JSON array of strings, in order
-of appearance. No commentary.`
+// splitInstruction asks the model to break the text into atomic claims, kept in its own file so
+// it can be read, edited, and evaluated on its own. Each claim must be a verbatim substring of
+// the input, so the backend can locate its offsets deterministically instead of trusting
+// model-produced numbers.
+//
+//go:embed prompts/split.prompt
+var splitInstruction string
 
-// splitMaxTokens leaves room for the claims of a full pasted page.
-const splitMaxTokens = 4096
+// splitMaxTokens must fit the claims of a maximum-size check text. The claims are substrings of
+// the input plus JSON overhead, so the ceiling tracks maxCheckChars (20000 chars is roughly
+// 5000 tokens) with headroom for quoting and punctuation.
+const splitMaxTokens = 8192
 
 // split asks the model for the text's atomic claims and locates each one's offsets in the text.
 // A claim the model did not copy verbatim cannot be located and is dropped with a loud log: a
@@ -53,7 +55,7 @@ func split(ctx context.Context, model Converser, text string) ([]domain.Claim, e
 			// Out-of-order occurrences are still located from the top before giving up.
 			at = strings.Index(text, part)
 			if at < 0 {
-				log.Printf("split: claim is not a verbatim substring, dropped: %q", part)
+				logDroppedClaim(part)
 				continue
 			}
 		} else {
@@ -63,6 +65,11 @@ func split(ctx context.Context, model Converser, text string) ([]domain.Claim, e
 		cursor = at + len(part)
 	}
 	return claims, nil
+}
+
+// logDroppedClaim reports a non-verbatim claim without writing the user's text to the logs.
+func logDroppedClaim(part string) {
+	log.Printf("split: claim is not a verbatim substring, dropped (%d chars)", len(part))
 }
 
 // parseClaimTexts reads the model's JSON array of claim strings.

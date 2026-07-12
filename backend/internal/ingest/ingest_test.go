@@ -58,7 +58,7 @@ func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 	blobs.EXPECT().Copy(gomock.Any(), staging, canonical).Return(nil)
 	extractor.EXPECT().Extract(gomock.Any(), content, "image/jpeg").
 		Return(extract.Extraction{Meta: map[string]string{"vendor": "Shell"}, Text: "Shell petrol $86.40"}, nil)
-	blobs.EXPECT().Put(gomock.Any(), "text/"+hash, []byte("Shell petrol $86.40"), "text/plain; charset=utf-8").Return(nil)
+	blobs.EXPECT().Put(gomock.Any(), "text/"+hash, "text/plain; charset=utf-8", []byte("Shell petrol $86.40")).Return(nil)
 	var saved domain.File
 	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
 		saved = f

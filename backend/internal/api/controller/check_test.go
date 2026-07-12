@@ -50,23 +50,29 @@ func TestCreateCheckPersistsPendingAndEnqueues(t *testing.T) {
 }
 
 func TestCreateCheckRejectsEmptyText(t *testing.T) {
+	// Arrange
 	ctrl := gomock.NewController(t)
 	c := controller.NewCheckController(mocks.NewMockCheckStore(ctrl), mocks.NewMockEnqueuer(ctrl))
 	rec := httptest.NewRecorder()
 
+	// Act
 	c.Create(rec, asOwner(httptest.NewRequest(http.MethodPost, "/checks", strings.NewReader(`{"text":"  "}`)), "alice"))
 
+	// Assert
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestCreateCheckRejectsOversizedText(t *testing.T) {
+	// Arrange
 	ctrl := gomock.NewController(t)
 	c := controller.NewCheckController(mocks.NewMockCheckStore(ctrl), mocks.NewMockEnqueuer(ctrl))
 	rec := httptest.NewRecorder()
 	huge := strings.Repeat("a", 20001)
 
+	// Act
 	c.Create(rec, asOwner(httptest.NewRequest(http.MethodPost, "/checks", strings.NewReader(`{"text":"`+huge+`"}`)), "alice"))
 
+	// Assert
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -89,6 +95,7 @@ func TestGetCheckHidesForeignCheckAsNotFound(t *testing.T) {
 }
 
 func TestGetCheckReturnsOwnersCheck(t *testing.T) {
+	// Arrange
 	ctrl := gomock.NewController(t)
 	store := mocks.NewMockCheckStore(ctrl)
 	store.EXPECT().Get(gomock.Any(), "chk-1").Return(domain.Check{ID: "chk-1", OwnerID: "alice", Status: domain.CheckDone}, nil)
@@ -98,8 +105,10 @@ func TestGetCheckReturnsOwnersCheck(t *testing.T) {
 	req := asOwner(httptest.NewRequest(http.MethodGet, "/checks/chk-1", nil), "alice")
 	req.SetPathValue("id", "chk-1")
 
+	// Act
 	c.Get(rec, req)
 
+	// Assert
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"status":"done"`)
 }

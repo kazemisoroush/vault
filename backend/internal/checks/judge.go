@@ -2,25 +2,22 @@ package checks
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
-// judgeInstruction asks the model whether one claim is supported by the candidate documents. The
-// span must be copied exactly: the gate re-reads the document at the span's location, so a
-// paraphrased "quote" is caught and discarded, never softened.
-const judgeInstruction = `You are checking whether a claim is supported by the documents below.
-Return ONLY a JSON object: {"fileId": "...", "span": "...", "tier": "..."}.
-"span" is the single passage that best supports the claim, COPIED EXACTLY, character for
-character, from one document. "fileId" is that document's id.
-"tier" is one of:
-  "verbatim":   the span states the claim in the document's own words.
-  "paraphrase": the span supports the claim but in different words.
-  "none":       no document supports the claim; then omit fileId and span.
-Never invent or adjust a span. If unsure, choose "none".`
+// judgeInstruction asks the model whether one claim is supported by the candidate documents,
+// kept in its own file so it can be read, edited, and evaluated on its own. It tells the model
+// the documents are untrusted data; the deterministic gate and the verbatim claim-span match in
+// the runner are what actually make an injected instruction harmless to a green verdict.
+//
+//go:embed prompts/judge.prompt
+var judgeInstruction string
 
 // judgeMaxTokens caps the judge reply: one span and a tier.
 const judgeMaxTokens = 1024
@@ -47,11 +44,7 @@ type judgement struct {
 func judge(ctx context.Context, model Converser, claim string, candidates []candidate) (judgement, error) {
 	var docs strings.Builder
 	for _, c := range candidates {
-		text := c.Text
-		if len(text) > maxDocChars {
-			text = text[:maxDocChars]
-		}
-		fmt.Fprintf(&docs, "<document id=%q name=%q>\n%s\n</document>\n", c.FileID, c.FileName, text)
+		fmt.Fprintf(&docs, "<document id=%q name=%q>\n%s\n</document>\n", c.FileID, c.FileName, truncateRunes(c.Text, maxDocChars))
 	}
 
 	prompt := fmt.Sprintf("%s\n\nClaim: %q\n\nDocuments:\n%s", judgeInstruction, claim, docs.String())
@@ -64,6 +57,18 @@ func judge(ctx context.Context, model Converser, claim string, candidates []cand
 	}
 
 	return parseJudgement(reply)
+}
+
+// truncateRunes bounds text to at most limit bytes without splitting a multibyte character.
+func truncateRunes(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut]
 }
 
 // parseJudgement reads the judge's JSON object, treating a malformed reply as tier none so a

@@ -12,8 +12,9 @@ const (
 
 // Claim verdict values. Verified means the claim's supporting span was confirmed by code,
 // character for character, against the cited file's stored text; review means the model judged
-// the span supportive but only a human can confirm a paraphrase; unsupported means nothing in
-// the owner's files backs the claim.
+// the span supportive but only a human can confirm a paraphrase; unsupported means the pipeline
+// found no supporting span it could confirm, which includes claims whose evidence exists but
+// was not retrieved or was rejected by the gate.
 const (
 	VerdictVerified    = "verified"
 	VerdictReview      = "review"

@@ -21,6 +21,9 @@ type Config struct {
 	EmbedModel    string
 	VectorBucket  string
 	VectorIndex   string
+	// FunctionName is this Lambda's own name, set by the Lambda runtime. The check pipeline
+	// self-invokes it to run asynchronously; empty outside Lambda.
+	FunctionName string
 }
 
 // Load reads the configuration from environment variables.
@@ -40,6 +43,7 @@ func Load() Config {
 		EmbedModel:    os.Getenv("VAULT_EMBED_MODEL"),
 		VectorBucket:  os.Getenv("VAULT_VECTOR_BUCKET"),
 		VectorIndex:   os.Getenv("VAULT_VECTOR_INDEX"),
+		FunctionName:  os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),
 	}
 }
 

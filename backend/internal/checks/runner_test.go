@@ -109,6 +109,45 @@ func TestRunParaphraseLandsInReviewNotVerified(t *testing.T) {
 	assert.False(t, got.Reference.Verified, "a paraphrase is never a machine green")
 }
 
+func TestRunVerbatimTierDemotedWhenSpanDoesNotRestateClaim(t *testing.T) {
+	// Arrange: an injected or confused judge labels an existing but irrelevant span "verbatim".
+	// The span passes the existence gate, but it does not restate the claim, so the code-level
+	// claim-span match must demote it to review. This is the prompt-injection defence: a green
+	// can never be steered by document content.
+	claim := "The parties agreed to waive the penalty clause."
+	runner, check, _ := newRunnerFixture(t, claim,
+		`["`+claim+`"]`,
+		`{"fileId": "file-1", "span": "The contract was executed on 14 February 2023.", "tier": "verbatim"}`,
+	)
+
+	// Act
+	require.NoError(t, runner.Run(context.Background(), "chk-1", "alice"))
+
+	// Assert: demoted to review, never verified.
+	require.Len(t, check.Claims, 1)
+	got := check.Claims[0]
+	assert.Equal(t, domain.VerdictReview, got.Verdict)
+	require.NotNil(t, got.Reference)
+	assert.False(t, got.Reference.Verified)
+	assert.Equal(t, domain.TierParaphrase, got.Reference.Tier)
+}
+
+func TestRunVerbatimSurvivesCaseAndWhitespaceDrift(t *testing.T) {
+	// Arrange: the claim differs from the span only in case and spacing; that is still verbatim.
+	claim := "the deposit of $40,000  was payable within seven days"
+	runner, check, _ := newRunnerFixture(t, claim,
+		`["`+claim+`"]`,
+		`{"fileId": "file-1", "span": "The deposit of $40,000 was payable within seven days.", "tier": "verbatim"}`,
+	)
+
+	// Act
+	require.NoError(t, runner.Run(context.Background(), "chk-1", "alice"))
+
+	// Assert
+	require.Len(t, check.Claims, 1)
+	assert.Equal(t, domain.VerdictVerified, check.Claims[0].Verdict)
+}
+
 func TestRunTierNoneStaysUnsupported(t *testing.T) {
 	claim := "The tenant kept a pet alpaca on the premises."
 	runner, check, _ := newRunnerFixture(t, claim,

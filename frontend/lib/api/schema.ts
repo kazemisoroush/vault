@@ -242,17 +242,17 @@ export interface components {
             fileName: string;
             /** @description The supporting passage, exactly as it appears in the file's stored text. */
             spanText: string;
-            /** @description Byte offset of the span in the file's stored text, located by code. */
+            /** @description UTF-8 byte offset of the span in the file's stored text, located by code. Byte, not character: a JavaScript client must slice encoded bytes (TextEncoder), or locate spanText directly, rather than indexing the string by these numbers. */
             start: number;
             end: number;
             /** @enum {string} */
-            tier: "verbatim" | "paraphrase" | "none";
-            /** @description True only when code re-read the stored text at the offsets and matched the span character for character. A paraphrase is never verified; a human confirms it. */
+            tier: "verbatim" | "paraphrase";
+            /** @description True only when code re-read the stored text at the offsets and matched the span character for character. A paraphrase is never verified. */
             verified: boolean;
         };
         Claim: {
             text: string;
-            /** @description Byte offset of the claim in the check's own text, for highlighting. */
+            /** @description UTF-8 byte offset of the claim in the check's own text. Byte, not character; see Reference.start for how a JavaScript client should use it. */
             start: number;
             end: number;
             /** @enum {string} */

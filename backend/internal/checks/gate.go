@@ -5,8 +5,8 @@ import "strings"
 // The gate is the product's reason to exist, and it is deliberately dumb: no model, no
 // normalization, no fuzz. A span either occurs in the stored text exactly, character for
 // character, or it does not. Anything cleverer would open the door to a false green, so
-// near-misses (different unicode spaces, curly quotes, OCR drift) fail closed and land on a
-// human instead.
+// near-misses (different unicode spaces, curly quotes, OCR drift) fail closed: the claim
+// stays unsupported rather than gaining a verified reference.
 
 // Locate returns the byte offsets of the first exact occurrence of span in text. It reports
 // ok=false when the span is empty or does not occur, so a fabricated span can never gain offsets.
