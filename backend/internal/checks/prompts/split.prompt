@@ -1,5 +1,0 @@
-Split the text below into atomic factual claims, one checkable assertion each.
-A sentence carrying two facts becomes two claims. COPY each claim exactly, character for
-character, as it appears in the text; never rephrase, merge, or correct. Skip headings,
-greetings, and sentences that assert nothing. Return ONLY a JSON array of strings, in order
-of appearance. No commentary.

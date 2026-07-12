@@ -10,48 +10,50 @@ const (
 	CheckFailed  = "failed"
 )
 
-// Claim verdict values. Verified means the claim's supporting span was confirmed by code,
-// character for character, against the cited file's stored text; review means the model judged
-// the span supportive but only a human can confirm a paraphrase; unsupported means the pipeline
-// found no supporting span it could confirm, which includes claims whose evidence exists but
-// was not retrieved or was rejected by the gate.
+// Claim verdict values, in precedence order. Disputed outranks everything: presenting a green
+// while knowingly holding contradicting evidence would be lying by omission. Verified means a
+// reference restates the claim and code confirmed it character for character; review means
+// reworded support was found and a human decides; unsupported means the search came back empty,
+// which is silence, not falsehood.
 const (
 	VerdictVerified    = "verified"
+	VerdictDisputed    = "disputed"
 	VerdictReview      = "review"
 	VerdictUnsupported = "unsupported"
 )
 
-// Reference tier values describe how the model says a span supports its claim. Verbatim is a
-// direct restatement eligible for code verification; paraphrase supports the claim in different
-// words; none means no supporting span was found.
+// Reference relation values describe how a passage bears on its claim, as judged by the model.
+// The passage's existence is always confirmed by code before a reference is persisted; the
+// relation itself is the model's judgment, except that verbatim additionally survives a
+// code-level claim-span comparison or is demoted to paraphrase.
 const (
-	TierVerbatim   = "verbatim"
-	TierParaphrase = "paraphrase"
-	TierNone       = "none"
+	RelationVerbatim    = "verbatim"
+	RelationParaphrase  = "paraphrase"
+	RelationContradicts = "contradicts"
 )
 
-// Reference is one supporting span in one of the owner's files. Start and End are byte offsets
-// into the file's stored canonical text, located deterministically by the gate, never taken from
-// the model. Verified is set only when the gate re-read the text at those offsets and matched the
-// span character for character.
+// Reference is one passage in one of the owner's files that bears on a claim. Start and End are
+// byte offsets into the file's stored canonical text, located deterministically by the gate,
+// never taken from the model. Every persisted Reference passed the existence gate: the span
+// occurs in the stored text character for character.
 type Reference struct {
 	FileID   string `json:"fileId" dynamodbav:"fileId"`
 	FileName string `json:"fileName" dynamodbav:"fileName"`
 	SpanText string `json:"spanText" dynamodbav:"spanText"`
 	Start    int    `json:"start" dynamodbav:"start"`
 	End      int    `json:"end" dynamodbav:"end"`
-	Tier     string `json:"tier" dynamodbav:"tier"`
-	Verified bool   `json:"verified" dynamodbav:"verified"`
+	Relation string `json:"relation" dynamodbav:"relation"`
 }
 
-// Claim is one atomic checkable assertion from the checked text. Start and End are byte offsets
-// into the check's own text, so the client can highlight the claim where it appears.
+// Claim is one sentence of the checked text. Start and End are byte offsets into the check's own
+// text, so the client can highlight the claim where it appears. References carry every
+// gate-verified passage that bears on the claim, supporting and contradicting alike.
 type Claim struct {
-	Text      string     `json:"text" dynamodbav:"text"`
-	Start     int        `json:"start" dynamodbav:"start"`
-	End       int        `json:"end" dynamodbav:"end"`
-	Verdict   string     `json:"verdict" dynamodbav:"verdict"`
-	Reference *Reference `json:"reference,omitempty" dynamodbav:"reference,omitempty"`
+	Text       string      `json:"text" dynamodbav:"text"`
+	Start      int         `json:"start" dynamodbav:"start"`
+	End        int         `json:"end" dynamodbav:"end"`
+	Verdict    string      `json:"verdict" dynamodbav:"verdict"`
+	References []Reference `json:"references,omitempty" dynamodbav:"references,omitempty"`
 }
 
 // Check is one verification run: the pasted text, split into claims, each carrying its verdict.

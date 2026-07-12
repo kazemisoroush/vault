@@ -237,27 +237,32 @@ export interface components {
             /** @description The text to verify, roughly a pasted page or two. */
             text: string;
         };
+        /** @description One passage in one of the owner's files that bears on a claim. Every reference passed the existence gate: code re-read the stored text at the offsets and matched spanText character for character before it was persisted. */
         Reference: {
             fileId: string;
             fileName: string;
-            /** @description The supporting passage, exactly as it appears in the file's stored text. */
+            /** @description The passage, exactly as it appears in the file's stored text. */
             spanText: string;
             /** @description UTF-8 byte offset of the span in the file's stored text, located by code. Byte, not character: a JavaScript client must slice encoded bytes (TextEncoder), or locate spanText directly, rather than indexing the string by these numbers. */
             start: number;
             end: number;
-            /** @enum {string} */
-            tier: "verbatim" | "paraphrase";
-            /** @description True only when code re-read the stored text at the offsets and matched the span character for character. A paraphrase is never verified. */
-            verified: boolean;
+            /**
+             * @description How the passage bears on the claim, as judged by the model. Verbatim additionally survived a code-level claim-span comparison; a missing contradicts reference never certifies that no contradiction exists.
+             * @enum {string}
+             */
+            relation: "verbatim" | "paraphrase" | "contradicts";
         };
         Claim: {
             text: string;
             /** @description UTF-8 byte offset of the claim in the check's own text. Byte, not character; see Reference.start for how a JavaScript client should use it. */
             start: number;
             end: number;
-            /** @enum {string} */
-            verdict: "verified" | "review" | "unsupported";
-            reference?: components["schemas"]["Reference"];
+            /**
+             * @description Verified means a reference restates the claim and code confirmed it character for character. Disputed outranks verified: the record holds contradicting evidence, and both sides are in references. Review means reworded support awaits a human. Unsupported means the search came back empty, which is silence, not falsehood.
+             * @enum {string}
+             */
+            verdict: "verified" | "disputed" | "review" | "unsupported";
+            references?: components["schemas"]["Reference"][];
         };
         Check: {
             id: string;

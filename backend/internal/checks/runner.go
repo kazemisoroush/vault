@@ -79,12 +79,10 @@ func (r *Runner) Run(ctx context.Context, checkID string, ownerID string) error 
 	return nil
 }
 
-// run splits the text and takes every claim through judge and gate.
+// run splits the text and takes every claim through judge and gate. The split is pure code, so
+// coverage is total by construction and the pipeline's first model call is the judge.
 func (r *Runner) run(ctx context.Context, check *domain.Check) error {
-	claims, err := split(ctx, r.model, check.Text)
-	if err != nil {
-		return fmt.Errorf("split check text: %w", err)
-	}
+	claims := split(check.Text)
 
 	for i := range claims {
 		if err := ctx.Err(); err != nil {
@@ -96,8 +94,9 @@ func (r *Runner) run(ctx context.Context, check *domain.Check) error {
 	return nil
 }
 
-// decide judges one claim against the owner's candidate files and gates the result. Every path
-// out of this function assigns a verdict; the only route to verified runs through the gate.
+// decide judges one claim against the owner's candidate files and gates every finding. Every
+// path out of this function assigns a verdict; the only route to verified runs through the
+// gate, and a gate-verified contradiction outranks everything.
 func (r *Runner) decide(ctx context.Context, ownerID string, claim *domain.Claim) {
 	claim.Verdict = domain.VerdictUnsupported
 
@@ -106,64 +105,87 @@ func (r *Runner) decide(ctx context.Context, ownerID string, claim *domain.Claim
 		return
 	}
 
-	judged, err := judge(ctx, r.model, claim.Text, candidates)
+	findings, err := judge(ctx, r.model, claim.Text, candidates)
 	if err != nil {
 		// The claim text stays out of the logs: it can carry the user's legal matter.
 		log.Printf("judge claim at %d..%d: %v", claim.Start, claim.End, err)
 		return
 	}
-	if judged.Tier == domain.TierNone || judged.Span == "" {
-		return
-	}
 
-	cited, ok := findCandidate(candidates, judged.FileID)
-	if !ok {
-		log.Printf("gate: judge cited unknown file %q for claim at %d..%d", judged.FileID, claim.Start, claim.End)
-		return
-	}
-
-	// The gate: locate the span in the cited file's stored text and confirm it byte for byte.
-	// Offsets come from Locate, never from the model.
-	start, end, ok := Locate(cited.Text, judged.Span)
-	if !ok || !Verify(cited.Text, judged.Span, start, end) {
-		// The judge asserted a span the stored text does not contain: a red flag on the judge,
-		// logged loudly (ids and lengths only, never the text), and the claim stays
-		// unsupported. It is never softened to review.
-		log.Printf("GATE FAIL: judge span (%d chars) not in %s for claim at %d..%d", len(judged.Span), cited.FileID, claim.Start, claim.End)
-		return
-	}
-
-	// A verbatim tier must also survive the claim-span match: the span must actually restate
-	// the claim, judged by code, not by the model. This closes the injection route where a
-	// hostile document steers the judge to call an existing-but-irrelevant span "verbatim";
-	// such a span is demoted to a paraphrase and lands on a human, never on a green.
-	tier := judged.Tier
-	if tier == domain.TierVerbatim && !verbatimMatches(claim.Text, judged.Span) {
-		log.Printf("gate: verbatim tier demoted, span does not restate claim at %d..%d", claim.Start, claim.End)
-		tier = domain.TierParaphrase
-	}
-
-	switch tier {
-	case domain.TierVerbatim, domain.TierParaphrase:
-		claim.Reference = &domain.Reference{
-			FileID:   cited.FileID,
-			FileName: cited.FileName,
-			SpanText: judged.Span,
-			Start:    start,
-			End:      end,
-			Tier:     tier,
-			Verified: tier == domain.TierVerbatim,
+	for _, f := range findings {
+		if ref, ok := r.gateFinding(claim, f, candidates); ok {
+			claim.References = append(claim.References, ref)
 		}
-		if tier == domain.TierVerbatim {
-			claim.Verdict = domain.VerdictVerified
-		} else {
-			claim.Verdict = domain.VerdictReview
-		}
+	}
+	claim.Verdict = verdictFor(claim.References)
+}
+
+// gateFinding turns one judge finding into a persisted reference, or rejects it. The gate:
+// the span must exist in the cited file's stored text character for character, with offsets
+// located by code, never taken from the model. A verbatim relation must additionally survive
+// the code-level claim-span comparison or it is demoted to paraphrase, which closes the
+// injection route where a hostile document steers the judge to call an existing-but-irrelevant
+// span "verbatim".
+func (r *Runner) gateFinding(claim *domain.Claim, f finding, candidates []candidate) (domain.Reference, bool) {
+	if f.Span == "" {
+		return domain.Reference{}, false
+	}
+	relation := f.Relation
+	switch relation {
+	case domain.RelationVerbatim, domain.RelationParaphrase, domain.RelationContradicts:
 	default:
-		// An unknown tier stays out of the stored reference entirely, so nothing outside the
-		// contract's enum is ever persisted; the verdict stays unsupported.
-		log.Printf("judge returned unknown tier %q for claim at %d..%d", judged.Tier, claim.Start, claim.End)
+		// An unknown relation is never persisted outside the contract's enum.
+		log.Printf("judge returned unknown relation %q for claim at %d..%d", f.Relation, claim.Start, claim.End)
+		return domain.Reference{}, false
 	}
+
+	cited, ok := findCandidate(candidates, f.FileID)
+	if !ok {
+		log.Printf("gate: judge cited unknown file %q for claim at %d..%d", f.FileID, claim.Start, claim.End)
+		return domain.Reference{}, false
+	}
+
+	start, end, ok := Locate(cited.Text, f.Span)
+	if !ok || !Verify(cited.Text, f.Span, start, end) {
+		// The judge asserted a span the stored text does not contain: a red flag on the judge,
+		// logged loudly (ids and lengths only, never the text), and the finding is discarded.
+		log.Printf("GATE FAIL: judge span (%d chars) not in %s for claim at %d..%d", len(f.Span), cited.FileID, claim.Start, claim.End)
+		return domain.Reference{}, false
+	}
+
+	if relation == domain.RelationVerbatim && !verbatimMatches(claim.Text, f.Span) {
+		log.Printf("gate: verbatim relation demoted, span does not restate claim at %d..%d", claim.Start, claim.End)
+		relation = domain.RelationParaphrase
+	}
+
+	return domain.Reference{
+		FileID:   cited.FileID,
+		FileName: cited.FileName,
+		SpanText: f.Span,
+		Start:    start,
+		End:      end,
+		Relation: relation,
+	}, true
+}
+
+// verdictFor derives the claim's verdict from its gate-verified references, in precedence
+// order: any contradiction disputes the claim regardless of support, a code-matched verbatim
+// verifies it, reworded support goes to human review, and silence stays unsupported.
+func verdictFor(refs []domain.Reference) string {
+	verdict := domain.VerdictUnsupported
+	for _, ref := range refs {
+		switch ref.Relation {
+		case domain.RelationContradicts:
+			return domain.VerdictDisputed
+		case domain.RelationVerbatim:
+			verdict = domain.VerdictVerified
+		case domain.RelationParaphrase:
+			if verdict != domain.VerdictVerified {
+				verdict = domain.VerdictReview
+			}
+		}
+	}
+	return verdict
 }
 
 // verbatimMatches reports whether the span restates the claim closely enough to be called
