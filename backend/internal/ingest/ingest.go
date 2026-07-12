@@ -49,7 +49,7 @@ func (h *Handler) Handle(ctx context.Context, event events.S3Event) error {
 		// The size comes from the event, not the client-declared record, so an archive guard
 		// cannot be bypassed by under-declaring the upload size.
 		if err := h.handleKey(ctx, key, record.S3.Object.Size); err != nil {
-			return err
+			return fmt.Errorf("handle upload %q: %w", key, err)
 		}
 	}
 	return nil
@@ -78,7 +78,10 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 	// The size is the trusted object size from the event, not the client-declared value.
 	if archive.IsZipContentType(pending.ContentType) && objectSize > archive.MaxArchiveBytes {
 		log.Printf("archive %s is %d bytes, over the %d cap; marking failed", uploadID, objectSize, int64(archive.MaxArchiveBytes))
-		return h.markArchiveFailed(ctx, pending, stagingKey)
+		if err := h.markArchiveFailed(ctx, pending, stagingKey); err != nil {
+			return fmt.Errorf("mark oversized archive %q: %w", uploadID, err)
+		}
+		return nil
 	}
 
 	content, contentType, err := h.blobs.Get(ctx, stagingKey)
@@ -88,7 +91,10 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 
 	// A zip archive is unpacked into its inner files rather than stored as one file.
 	if archive.IsZip(content, contentType) {
-		return h.expand(ctx, pending, stagingKey, content)
+		if err := h.expand(ctx, pending, stagingKey, content); err != nil {
+			return fmt.Errorf("expand archive %q: %w", uploadID, err)
+		}
+		return nil
 	}
 
 	hash := hashHex(content)
@@ -111,7 +117,7 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 		}
 		log.Printf("extraction failed for %s: %v", hash, err)
 		if _, err := h.save(ctx, file, domain.StatusFailed, nil); err != nil {
-			return err
+			return fmt.Errorf("record failed extraction for %q: %w", hash, err)
 		}
 		h.cleanup(ctx, uploadID, stagingKey)
 		return nil
@@ -119,7 +125,7 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 
 	saved, err := h.save(ctx, file, domain.StatusReady, meta)
 	if err != nil {
-		return err
+		return fmt.Errorf("settle %q: %w", hash, err)
 	}
 	h.embed(ctx, saved)
 	h.cleanup(ctx, uploadID, stagingKey)

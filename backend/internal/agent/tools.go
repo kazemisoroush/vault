@@ -111,7 +111,11 @@ func (a *Agent) runSearch(ctx context.Context, ownerID string, raw json.RawMessa
 	if err != nil {
 		return "", fmt.Errorf("query vectors: %w", err)
 	}
-	return marshalViews(a.load(ctx, ownerID, ids))
+	out, err := marshalViews(a.load(ctx, ownerID, ids))
+	if err != nil {
+		return "", fmt.Errorf("marshal search results: %w", err)
+	}
+	return out, nil
 }
 
 type predicate struct {
@@ -147,7 +151,11 @@ func (a *Agent) runFacts(ctx context.Context, ownerID string, raw json.RawMessag
 			if matchesFacts(file, in.Contains, since, until) {
 				matches = append(matches, file)
 				if len(matches) >= limit {
-					return marshalViews(matches)
+					out, err := marshalViews(matches)
+					if err != nil {
+						return "", fmt.Errorf("marshal facts results: %w", err)
+					}
+					return out, nil
 				}
 			}
 		}
@@ -156,7 +164,11 @@ func (a *Agent) runFacts(ctx context.Context, ownerID string, raw json.RawMessag
 		}
 		cursor = next
 	}
-	return marshalViews(matches)
+	out, err := marshalViews(matches)
+	if err != nil {
+		return "", fmt.Errorf("marshal facts results: %w", err)
+	}
+	return out, nil
 }
 
 type getInput struct {
@@ -174,7 +186,11 @@ func (a *Agent) runGet(ctx context.Context, ownerID string, raw json.RawMessage)
 	if err != nil || file.OwnerID != ownerID {
 		return `{"error":"file not found"}`, nil
 	}
-	return marshalViews([]domain.File{file})
+	out, err := marshalViews([]domain.File{file})
+	if err != nil {
+		return "", fmt.Errorf("marshal file result: %w", err)
+	}
+	return out, nil
 }
 
 // matchesFacts reports whether a file passes every predicate and the time bounds. A predicate

@@ -24,7 +24,10 @@ func (h *Handler) expand(ctx context.Context, archiveFile domain.File, stagingKe
 		if err != nil {
 			// The archive could not be opened, so there is nothing to ingest.
 			log.Printf("archive %s could not be opened: %v", archiveFile.ID, err)
-			return h.markArchiveFailed(ctx, archiveFile, stagingKey)
+			if ferr := h.markArchiveFailed(ctx, archiveFile, stagingKey); ferr != nil {
+				return fmt.Errorf("mark unopenable archive %q: %w", archiveFile.ID, ferr)
+			}
+			return nil
 		}
 		if stageErr = h.stageChild(ctx, archiveFile.OwnerID, zipHash, file); stageErr != nil {
 			break
@@ -34,11 +37,14 @@ func (h *Handler) expand(ctx context.Context, archiveFile domain.File, stagingKe
 	if stageErr != nil {
 		// A staging failure fails the invocation so the whole archive is redriven; the
 		// deterministic child ids make that safe to repeat.
-		return stageErr
+		return fmt.Errorf("stage entries of archive %q: %w", archiveFile.ID, stageErr)
 	}
 	if staged == 0 {
 		log.Printf("archive %s held no files to ingest, marking failed", archiveFile.ID)
-		return h.markArchiveFailed(ctx, archiveFile, stagingKey)
+		if err := h.markArchiveFailed(ctx, archiveFile, stagingKey); err != nil {
+			return fmt.Errorf("mark empty archive %q: %w", archiveFile.ID, err)
+		}
+		return nil
 	}
 
 	log.Printf("archive %s expanded into %d files", archiveFile.ID, staged)
@@ -78,7 +84,7 @@ func (h *Handler) stageChild(ctx context.Context, ownerID string, zipHash string
 // is kept and settled to failed, which handleKey treats as a no-op on redelivery.
 func (h *Handler) markArchiveFailed(ctx context.Context, archiveFile domain.File, stagingKey string) error {
 	if _, err := h.save(ctx, archiveFile, domain.StatusFailed, nil); err != nil {
-		return err
+		return fmt.Errorf("record archive %q as failed: %w", archiveFile.ID, err)
 	}
 	if err := h.blobs.Delete(ctx, stagingKey); err != nil {
 		log.Printf("delete staging %s: %v", stagingKey, err)
