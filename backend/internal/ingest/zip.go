@@ -37,7 +37,7 @@ func (h *Handler) expand(ctx context.Context, archiveFile domain.File, stagingKe
 	if stageErr != nil {
 		// A staging failure fails the invocation so the whole archive is redriven; the
 		// deterministic child ids make that safe to repeat.
-		return fmt.Errorf("expand archive %q: %w", archiveFile.ID, stageErr)
+		return fmt.Errorf("stage entries of archive %q: %w", archiveFile.ID, stageErr)
 	}
 	if staged == 0 {
 		log.Printf("archive %s held no files to ingest, marking failed", archiveFile.ID)
