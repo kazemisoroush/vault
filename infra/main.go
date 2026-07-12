@@ -139,6 +139,9 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		// The ask agent runs several model calls in one request as it queries and answers, so it
 		// needs more than the default headroom.
 		Timeout: awscdk.Duration_Seconds(jsii.Number(120)),
+		// Ingest reads a whole object into memory, and unpacking a dropped zip holds the archive
+		// plus an inner file at once, so the default 128 MB is not enough.
+		MemorySize: jsii.Number(1024),
 		Environment: &map[string]*string{
 			"VAULT_TABLE":          table.TableName(),
 			"VAULT_BUCKET":         bucket.BucketName(),

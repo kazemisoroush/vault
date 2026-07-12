@@ -63,9 +63,20 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
 		return fmt.Errorf("get pending %q: %w", uploadID, err)
 	}
 
+	// Refuse an archive larger than the cap before loading it, so a huge zip cannot exhaust memory.
+	if isZipContentType(pending.ContentType) && pending.Size > maxZipBytes {
+		log.Printf("zip %s is %d bytes, over the %d cap; marking failed", uploadID, pending.Size, int64(maxZipBytes))
+		return h.markArchiveFailed(ctx, pending, stagingKey)
+	}
+
 	content, contentType, err := h.blobs.Get(ctx, stagingKey)
 	if err != nil {
 		return fmt.Errorf("read staged %q: %w", stagingKey, err)
+	}
+
+	// A zip archive is unpacked into its inner files rather than stored as one file.
+	if isZipArchive(content, contentType) {
+		return h.expand(ctx, pending, stagingKey, content)
 	}
 
 	hash := hashHex(content)

@@ -8,11 +8,13 @@ import (
 
 //go:generate go tool mockgen -source=blob.go -destination=../mocks/blob_mock.go -package=mocks
 
-// Store presigns uploads and downloads, reads, copies, and deletes stored objects.
+// Store presigns uploads and downloads, reads, writes, copies, and deletes stored objects.
 type Store interface {
 	PresignPut(ctx context.Context, key string, contentType string, expiry time.Duration) (string, error)
 	PresignGet(ctx context.Context, key string, expiry time.Duration) (string, error)
 	Get(ctx context.Context, key string) ([]byte, string, error)
+	// Put writes bytes to a key. Ingest uses it to stage a zip's inner files as fresh uploads.
+	Put(ctx context.Context, key string, contentType string, content []byte) error
 	Copy(ctx context.Context, srcKey string, dstKey string) error
 	Delete(ctx context.Context, key string) error
 }

@@ -114,3 +114,17 @@ func (mr *MockStoreMockRecorder) PresignPut(ctx, key, contentType, expiry any) *
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PresignPut", reflect.TypeOf((*MockStore)(nil).PresignPut), ctx, key, contentType, expiry)
 }
+
+// Put mocks base method.
+func (m *MockStore) Put(ctx context.Context, key, contentType string, content []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Put", ctx, key, contentType, content)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Put indicates an expected call of Put.
+func (mr *MockStoreMockRecorder) Put(ctx, key, contentType, content any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockStore)(nil).Put), ctx, key, contentType, content)
+}
