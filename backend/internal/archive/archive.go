@@ -1,7 +1,9 @@
 // Package archive unpacks a container file, such as a zip, into the individual files inside it. It
-// holds no storage or pipeline knowledge: it turns bytes into a list of inner files, and the caller
-// decides what to do with them.
+// holds no storage or pipeline knowledge: it turns bytes into a stream of inner files, and the
+// caller decides what to do with each.
 package archive
+
+import "iter"
 
 // File is one file pulled out of an archive.
 type File struct {
@@ -14,7 +16,9 @@ type File struct {
 	Data []byte
 }
 
-// Unpacker turns an archive's bytes into the files inside it.
+// Unpacker reads an archive and yields the files inside it one at a time, so a caller never holds
+// the whole decompressed archive in memory at once. A failure to open the archive is yielded as a
+// zero File with a non-nil error; a per-entry read failure is skipped rather than yielded.
 type Unpacker interface {
-	Unpack(content []byte) ([]File, error)
+	Unpack(content []byte) iter.Seq2[File, error]
 }

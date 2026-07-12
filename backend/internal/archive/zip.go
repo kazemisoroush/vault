@@ -5,16 +5,20 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"iter"
 	"mime"
 	"path"
 	"strings"
 )
 
-// These bounds cap how much one archive can produce, so a crafted file cannot exhaust the process.
+// These bounds cap how much one archive can produce. Peak memory stays bounded because Unpack
+// streams one entry at a time: at most the archive bytes (up to MaxArchiveBytes, held as the zip
+// reader's backing buffer) plus one inner file (up to maxEntryBytes) are resident at once, well
+// under the function's memory. maxTotalBytes bounds the total work a single archive can fan out.
 // MaxArchiveBytes is exported because the caller checks it before loading the archive at all.
 const (
 	MaxArchiveBytes = 512 << 20 // largest archive to load
-	maxTotalBytes   = 1 << 30   // total bytes pulled from one archive
+	maxTotalBytes   = 1 << 30   // total bytes fanned out from one archive
 	maxEntries      = 512       // files pulled from one archive
 	maxEntryBytes   = 64 << 20  // per inner file
 )
@@ -47,38 +51,41 @@ func hasZipMagic(content []byte) bool {
 // per-file, and total-size caps measured on the bytes actually read.
 type Zip struct{}
 
-// Unpack returns the real files inside a zip. An unreadable entry is skipped rather than failing the
-// whole archive. Caps stop early rather than erroring, so a partial archive still yields its files.
-func (Zip) Unpack(content []byte) ([]File, error) {
-	reader, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
-	if err != nil {
-		return nil, fmt.Errorf("open zip: %w", err)
-	}
-
-	var files []File
-	var total int64
-	for _, entry := range reader.File {
-		if len(files) >= maxEntries {
-			break
-		}
-		if skipEntry(entry) || isNestedZip(entry.Name) {
-			continue
-		}
-		data, err := readEntry(entry)
+// Unpack yields the real files inside a zip one at a time. An unreadable entry is skipped rather
+// than failing the whole archive; the caps stop early rather than erroring, so a partial archive
+// still yields the files it read. A failure to open the archive is yielded once as a zero File with
+// an error.
+func (Zip) Unpack(content []byte) iter.Seq2[File, error] {
+	return func(yield func(File, error) bool) {
+		reader, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
 		if err != nil {
-			continue
+			yield(File{}, fmt.Errorf("open zip: %w", err))
+			return
 		}
-		total += int64(len(data))
-		if total > maxTotalBytes {
-			break
+
+		var total int64
+		emitted := 0
+		for _, entry := range reader.File {
+			if emitted >= maxEntries {
+				return
+			}
+			if skipEntry(entry) || isNestedZip(entry.Name) {
+				continue
+			}
+			data, err := readEntry(entry)
+			if err != nil {
+				continue
+			}
+			total += int64(len(data))
+			if total > maxTotalBytes {
+				return
+			}
+			if !yield(File{Name: entry.Name, ContentType: contentTypeForName(entry.Name), Data: data}, nil) {
+				return
+			}
+			emitted++
 		}
-		files = append(files, File{
-			Name:        entry.Name,
-			ContentType: contentTypeForName(entry.Name),
-			Data:        data,
-		})
 	}
-	return files, nil
 }
 
 // skipEntry reports whether an entry is not a real file to ingest: a directory, an empty file, or

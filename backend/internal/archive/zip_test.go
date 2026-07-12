@@ -3,12 +3,24 @@ package archive
 import (
 	"archive/zip"
 	"bytes"
+	"iter"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// collect drains an unpack stream into a slice, failing on the first error.
+func collect(t *testing.T, seq iter.Seq2[File, error]) []File {
+	t.Helper()
+	var files []File
+	for f, err := range seq {
+		require.NoError(t, err)
+		files = append(files, f)
+	}
+	return files
+}
 
 // zipEntry is one file (a directory when body is empty and the name ends in a slash) for a test zip.
 type zipEntry struct {
@@ -45,10 +57,9 @@ func TestZipUnpackReturnsOnlyRealFiles(t *testing.T) {
 	})
 
 	// Act
-	files, err := Zip{}.Unpack(content)
+	files := collect(t, Zip{}.Unpack(content))
 
 	// Assert: only the two real files come back, with their full paths and guessed types.
-	require.NoError(t, err)
 	require.Len(t, files, 2)
 	byName := map[string]File{}
 	for _, f := range files {
@@ -69,19 +80,24 @@ func TestZipUnpackReturnsEmptyForAJunkOnlyArchive(t *testing.T) {
 	})
 
 	// Act
-	files, err := Zip{}.Unpack(content)
+	files := collect(t, Zip{}.Unpack(content))
 
 	// Assert: no real files, so the caller can treat the archive as empty.
-	require.NoError(t, err)
 	assert.Empty(t, files)
 }
 
 func TestZipUnpackRejectsACorruptArchive(t *testing.T) {
-	// Act: zip magic but not a valid archive.
-	_, err := Zip{}.Unpack([]byte("PK\x03\x04 not really a zip"))
+	// Act: zip magic but not a valid archive; the stream yields a single error.
+	var gotErr error
+	for _, err := range (Zip{}).Unpack([]byte("PK\x03\x04 not really a zip")) {
+		if err != nil {
+			gotErr = err
+			break
+		}
+	}
 
 	// Assert
-	require.Error(t, err)
+	require.Error(t, gotErr)
 }
 
 func TestIsZipNeedsBothTypeAndMagic(t *testing.T) {

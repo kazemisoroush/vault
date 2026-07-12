@@ -17,26 +17,31 @@ import (
 // the entry path, so a redriven expansion re-stages the same ids rather than duplicating files. An
 // archive that yields no files is marked failed rather than vanishing.
 func (h *Handler) expand(ctx context.Context, archiveFile domain.File, stagingKey string, content []byte) error {
-	files, err := h.unpacker.Unpack(content)
-	if err != nil {
-		log.Printf("archive %s could not be opened: %v", archiveFile.ID, err)
-		return h.markArchiveFailed(ctx, archiveFile, stagingKey)
+	zipHash := hashHex(content)
+	staged := 0
+	var stageErr error
+	for file, err := range h.unpacker.Unpack(content) {
+		if err != nil {
+			// The archive could not be opened, so there is nothing to ingest.
+			log.Printf("archive %s could not be opened: %v", archiveFile.ID, err)
+			return h.markArchiveFailed(ctx, archiveFile, stagingKey)
+		}
+		if stageErr = h.stageChild(ctx, archiveFile.OwnerID, zipHash, file); stageErr != nil {
+			break
+		}
+		staged++
 	}
-	if len(files) == 0 {
+	if stageErr != nil {
+		// A staging failure fails the invocation so the whole archive is redriven; the
+		// deterministic child ids make that safe to repeat.
+		return stageErr
+	}
+	if staged == 0 {
 		log.Printf("archive %s held no files to ingest, marking failed", archiveFile.ID)
 		return h.markArchiveFailed(ctx, archiveFile, stagingKey)
 	}
 
-	zipHash := hashHex(content)
-	for _, file := range files {
-		if err := h.stageChild(ctx, archiveFile.OwnerID, zipHash, file); err != nil {
-			// A staging failure fails the invocation so the whole archive is redriven; the
-			// deterministic child ids make that safe to repeat.
-			return err
-		}
-	}
-
-	log.Printf("archive %s expanded into %d files", archiveFile.ID, len(files))
+	log.Printf("archive %s expanded into %d files", archiveFile.ID, staged)
 	// The archive is not kept: drop its pending record and staging object.
 	h.cleanup(ctx, archiveFile.ID, stagingKey)
 	return nil
