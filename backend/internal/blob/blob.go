@@ -13,7 +13,7 @@ type Store interface {
 	PresignPut(ctx context.Context, key string, contentType string, expiry time.Duration) (string, error)
 	PresignGet(ctx context.Context, key string, expiry time.Duration) (string, error)
 	Get(ctx context.Context, key string) ([]byte, string, error)
-	// Put writes bytes to a key. Ingest uses it to stage a zip's inner files as fresh uploads.
+	// Put writes bytes to a key, overwriting any existing object.
 	Put(ctx context.Context, key string, contentType string, content []byte) error
 	Copy(ctx context.Context, srcKey string, dstKey string) error
 	Delete(ctx context.Context, key string) error

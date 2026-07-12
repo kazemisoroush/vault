@@ -14,6 +14,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 
+	"github.com/kazemisoroush/vault/backend/internal/archive"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/embed"
@@ -29,12 +30,13 @@ type Handler struct {
 	extractor extract.Extractor
 	embedder  embed.Embedder
 	vectors   vectors.Store
+	unpacker  archive.Unpacker
 	now       func() time.Time
 }
 
-// NewHandler builds an ingest Handler with a real clock.
+// NewHandler builds an ingest Handler with a real clock and the default zip unpacker.
 func NewHandler(idx index.Index, blobs blob.Store, extractor extract.Extractor, embedder embed.Embedder, store vectors.Store) *Handler {
-	return &Handler{index: idx, blobs: blobs, extractor: extractor, embedder: embedder, vectors: store, now: time.Now}
+	return &Handler{index: idx, blobs: blobs, extractor: extractor, embedder: embedder, vectors: store, unpacker: archive.Zip{}, now: time.Now}
 }
 
 // Handle processes every object-created record in an S3 event.
@@ -44,7 +46,9 @@ func (h *Handler) Handle(ctx context.Context, event events.S3Event) error {
 		if err != nil {
 			return fmt.Errorf("decode key %q: %w", record.S3.Object.Key, err)
 		}
-		if err := h.handleKey(ctx, key); err != nil {
+		// The size comes from the event, not the client-declared record, so an archive guard
+		// cannot be bypassed by under-declaring the upload size.
+		if err := h.handleKey(ctx, key, record.S3.Object.Size); err != nil {
 			return err
 		}
 	}
@@ -52,7 +56,8 @@ func (h *Handler) Handle(ctx context.Context, event events.S3Event) error {
 }
 
 // handleKey settles one staged upload under its content hash, which makes a re-drop idempotent.
-func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
+// objectSize is the real size of the object from the S3 event.
+func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize int64) error {
 	uploadID := blob.IDFromStagingKey(stagingKey)
 
 	pending, err := h.index.Get(ctx, uploadID)
@@ -63,9 +68,16 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
 		return fmt.Errorf("get pending %q: %w", uploadID, err)
 	}
 
+	// A record already settled to a terminal state (for example a failed archive whose staging
+	// object was removed) is a no-op on redelivery, rather than erroring on the missing object.
+	if pending.Status == domain.StatusReady || pending.Status == domain.StatusFailed {
+		return nil
+	}
+
 	// Refuse an archive larger than the cap before loading it, so a huge zip cannot exhaust memory.
-	if isZipContentType(pending.ContentType) && pending.Size > maxZipBytes {
-		log.Printf("zip %s is %d bytes, over the %d cap; marking failed", uploadID, pending.Size, int64(maxZipBytes))
+	// The size is the trusted object size from the event, not the client-declared value.
+	if archive.IsZipContentType(pending.ContentType) && objectSize > archive.MaxArchiveBytes {
+		log.Printf("archive %s is %d bytes, over the %d cap; marking failed", uploadID, objectSize, int64(archive.MaxArchiveBytes))
 		return h.markArchiveFailed(ctx, pending, stagingKey)
 	}
 
@@ -75,7 +87,7 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
 	}
 
 	// A zip archive is unpacked into its inner files rather than stored as one file.
-	if isZipArchive(content, contentType) {
+	if archive.IsZip(content, contentType) {
 		return h.expand(ctx, pending, stagingKey, content)
 	}
 

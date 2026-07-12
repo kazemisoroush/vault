@@ -22,8 +22,13 @@ import (
 
 // s3Event builds an object-created event for one key.
 func s3Event(key string) events.S3Event {
+	return s3EventSized(key, 0)
+}
+
+// s3EventSized builds an object-created event carrying the object's real size, as S3 reports it.
+func s3EventSized(key string, size int64) events.S3Event {
 	return events.S3Event{Records: []events.S3EventRecord{
-		{S3: events.S3Entity{Object: events.S3Object{Key: key}}},
+		{S3: events.S3Entity{Object: events.S3Object{Key: key, Size: size}}},
 	}}
 }
 

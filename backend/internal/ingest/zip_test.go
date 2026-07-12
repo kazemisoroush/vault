@@ -16,7 +16,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
-// zipEntry is one file (or directory, when body is nil) written into a test archive, in order.
+// zipEntry is one file (a directory when body is empty and the name ends in a slash) for a test zip.
 type zipEntry struct {
 	name string
 	body string
@@ -92,13 +92,13 @@ func TestZipExpandsEachInnerFileAsAStagedUpload(t *testing.T) {
 }
 
 func TestZipOverSizeCapMarksFailedWithoutLoading(t *testing.T) {
-	// Arrange: the record already declares a size over the cap, so it must never be read.
+	// Arrange: the S3 event reports a size over the cap, so the object must never be read.
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
 
 	staging := "uploads/upl-1"
-	pending := domain.File{ID: "upl-1", Key: staging, Name: "huge.zip", ContentType: "application/zip", Size: (512 << 20) + 1, Status: domain.StatusPending}
+	pending := domain.File{ID: "upl-1", Key: staging, Name: "huge.zip", ContentType: "application/zip", Status: domain.StatusPending}
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
 	var saved domain.File
 	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
@@ -110,13 +110,44 @@ func TestZipOverSizeCapMarksFailedWithoutLoading(t *testing.T) {
 
 	h := ingest.NewHandler(idx, blobs, mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
 
-	// Act
-	err := h.Handle(context.Background(), s3Event(staging))
+	// Act: the event's object size, not the client-declared record size, drives the guard.
+	err := h.Handle(context.Background(), s3EventSized(staging, (512<<20)+1))
 
 	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusFailed, saved.Status)
 	assert.Equal(t, "upl-1", saved.ID)
+}
+
+func TestZipWithNoRealFilesMarksFailed(t *testing.T) {
+	// Arrange: an archive holding only a directory and macOS bookkeeping.
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	blobs := mocks.NewMockStore(ctrl)
+
+	content := makeZip(t, []zipEntry{
+		{name: "folder/", body: ""},
+		{name: "__MACOSX/folder/x", body: "fork"},
+	})
+	staging := "uploads/upl-1"
+	pending := domain.File{ID: "upl-1", Key: staging, Name: "empty.zip", ContentType: "application/zip", Status: domain.StatusPending}
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
+	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "application/zip", nil)
+	var saved domain.File
+	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
+		saved = f
+		return nil
+	})
+	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
+
+	h := ingest.NewHandler(idx, blobs, mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+
+	// Act
+	err := h.Handle(context.Background(), s3Event(staging))
+
+	// Assert: no children staged, the archive is failed rather than vanishing.
+	require.NoError(t, err)
+	assert.Equal(t, domain.StatusFailed, saved.Status)
 }
 
 func TestCorruptZipMarksFailed(t *testing.T) {
@@ -141,7 +172,22 @@ func TestCorruptZipMarksFailed(t *testing.T) {
 	// Act
 	err := h.Handle(context.Background(), s3Event(staging))
 
-	// Assert: no children staged, the archive record is failed, staging removed.
+	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusFailed, saved.Status)
+}
+
+func TestSettledArchiveRedeliveryIsNoOp(t *testing.T) {
+	// Arrange: a redelivered event for an archive already settled to failed (its staging is gone).
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", ContentType: "application/zip", Status: domain.StatusFailed}, nil)
+
+	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl), mocks.NewMockExtractor(ctrl), mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))
+
+	// Act
+	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
+
+	// Assert: no read, no re-processing; the missing staging object is never touched.
+	require.NoError(t, err)
 }
