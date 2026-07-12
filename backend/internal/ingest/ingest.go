@@ -10,6 +10,7 @@ import (
 	"log"
 	"maps"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -100,7 +101,7 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 		return fmt.Errorf("copy to %q: %w", file.Key, err)
 	}
 
-	meta, err := h.extractor.Extract(ctx, content, contentType)
+	extraction, err := h.extractor.Extract(ctx, content, contentType)
 	if err != nil {
 		if errors.Is(err, extract.ErrRetryable) {
 			// Extraction is throttled or briefly unavailable. Leave the pending record and
@@ -117,13 +118,26 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 		return nil
 	}
 
-	saved, err := h.save(ctx, file, domain.StatusReady, meta)
+	h.saveText(ctx, file.ID, extraction.Text)
+
+	saved, err := h.save(ctx, file, domain.StatusReady, extraction.Meta)
 	if err != nil {
 		return err
 	}
 	h.embed(ctx, saved)
 	h.cleanup(ctx, uploadID, stagingKey)
 	return nil
+}
+
+// saveText stores the file's canonical text, the record later checks verify quoted spans against.
+// A failure is logged, not fatal: the file record still lands, and a re-drop rewrites the text.
+func (h *Handler) saveText(ctx context.Context, id string, text string) {
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	if err := h.blobs.Put(ctx, blob.TextKey(id), "text/plain; charset=utf-8", []byte(text)); err != nil {
+		log.Printf("store text for %s: %v", id, err)
+	}
 }
 
 // cleanup removes the settled file's staging record and object, logging failures rather than failing.

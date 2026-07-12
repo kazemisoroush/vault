@@ -10,14 +10,30 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
-// instruction tells the model to return only a flat JSON metadata object.
+// instruction tells the model to return only a flat JSON metadata object. It is used for files
+// whose text is already decoded deterministically, so the model only fills the metadata.
 const instruction = `You are extracting metadata from a personal file (often a receipt, ticket, or document image).
 Return ONLY a flat JSON object mapping string keys to string values that a person would search by,
 for example vendor, amount, date, place, person, event, or document type.
 Use whatever keys the file actually carries. No nesting, no arrays, no commentary.`
 
-// maxTokens caps the model reply to the size of a small flat metadata object.
-const maxTokens = 1024
+// transcribeInstruction asks for metadata and a full transcription in one reply. It is used for
+// images and PDFs, whose text the backend cannot decode itself. The transcription becomes the
+// file's canonical text, so it must be word-for-word.
+const transcribeInstruction = `You are reading a personal file (often a receipt, ticket, or document).
+Return ONLY a JSON object with exactly two keys:
+"meta": a flat object mapping string keys to string values a person would search by,
+for example vendor, amount, date, place, person, event, or document type.
+"text": the file's complete text, transcribed word for word in reading order, preserving line
+breaks between blocks. Transcribe exactly what is written; do not correct, summarise, or omit.
+No other keys, no commentary.`
+
+// maxTokens caps the model reply to the size of a small flat metadata object, and
+// transcribeMaxTokens leaves room for a full document transcription beside it.
+const (
+	maxTokens           = 1024
+	transcribeMaxTokens = 8192
+)
 
 // ClaudeExtractor extracts metadata using Claude on Amazon Bedrock.
 type ClaudeExtractor struct {
@@ -29,22 +45,62 @@ func NewClaudeExtractor(_ context.Context, region, model string, recorder llm.Re
 	return &ClaudeExtractor{model: llm.NewModel(region, model, "extract", recorder)}, nil
 }
 
-// Extract sends the file to the model and returns its flat metadata map.
-func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentType string) (map[string]string, error) {
+// Extract sends the file to the model and returns its metadata and canonical text. Text-bearing
+// formats keep their deterministically decoded text; images and PDFs are transcribed by the model
+// in the same call that extracts their metadata.
+func (e *ClaudeExtractor) Extract(ctx context.Context, content []byte, contentType string) (Extraction, error) {
+	if needsTranscription(contentType) {
+		return e.extractTranscribing(ctx, content, contentType)
+	}
+
+	text := deterministicText(content, contentType)
 	prompt := fmt.Sprintf("%s\n\n[file: %s, %d bytes]", instruction, contentType, len(content))
 	reply, err := e.model.Converse(ctx, llm.Conversation{
 		Prompt:    prompt,
-		Content:   []llm.Part{fileBlock(content, contentType), llm.Text(instruction)},
+		Content:   []llm.Part{llm.Text(text), llm.Text(instruction)},
 		MaxTokens: maxTokens,
 	})
 	if err != nil {
-		return nil, wrapExtractError(err)
+		return Extraction{}, wrapExtractError(err)
 	}
 
 	// Merge the model's metadata over the file's own embedded metadata, treating a declined reply as none.
 	result := embeddedMeta(content, contentType)
 	maps.Copy(result, metaFromReply(reply))
-	return result, nil
+	return Extraction{Meta: result, Text: text}, nil
+}
+
+// extractTranscribing asks the model for metadata and a word-for-word transcription in one call.
+func (e *ClaudeExtractor) extractTranscribing(ctx context.Context, content []byte, contentType string) (Extraction, error) {
+	prompt := fmt.Sprintf("%s\n\n[file: %s, %d bytes]", transcribeInstruction, contentType, len(content))
+	reply, err := e.model.Converse(ctx, llm.Conversation{
+		Prompt:    prompt,
+		Content:   []llm.Part{fileBlock(content, contentType), llm.Text(transcribeInstruction)},
+		MaxTokens: transcribeMaxTokens,
+	})
+	if err != nil {
+		return Extraction{}, wrapExtractError(err)
+	}
+
+	meta, text := transcriptionFromReply(reply)
+	result := embeddedMeta(content, contentType)
+	maps.Copy(result, meta)
+	return Extraction{Meta: result, Text: text}, nil
+}
+
+// needsTranscription reports whether the model must transcribe the file's text because the
+// backend cannot decode it deterministically.
+func needsTranscription(contentType string) bool {
+	return strings.HasPrefix(contentType, "image/") || contentType == "application/pdf"
+}
+
+// deterministicText decodes the file's text without a model: office documents through their
+// package structure, everything else as plain bytes.
+func deterministicText(content []byte, contentType string) string {
+	if isOffice(contentType) {
+		return officeContent(content)
+	}
+	return string(content)
 }
 
 // wrapExtractError tags a transient model failure, such as throttling, as ErrRetryable so a caller

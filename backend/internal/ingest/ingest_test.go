@@ -56,7 +56,9 @@ func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
 	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
 	blobs.EXPECT().Copy(gomock.Any(), staging, canonical).Return(nil)
-	extractor.EXPECT().Extract(gomock.Any(), content, "image/jpeg").Return(map[string]string{"vendor": "Shell"}, nil)
+	extractor.EXPECT().Extract(gomock.Any(), content, "image/jpeg").
+		Return(extract.Extraction{Meta: map[string]string{"vendor": "Shell"}, Text: "Shell petrol $86.40"}, nil)
+	blobs.EXPECT().Put(gomock.Any(), "text/"+hash, []byte("Shell petrol $86.40"), "text/plain; charset=utf-8").Return(nil)
 	var saved domain.File
 	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
 		saved = f
@@ -95,7 +97,7 @@ func TestSettleExtractionFailsMarksFailedAndCleansUp(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: staging, Status: domain.StatusPending}, nil)
 	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
 	blobs.EXPECT().Copy(gomock.Any(), staging, "files/"+hash).Return(nil)
-	extractor.EXPECT().Extract(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("model down"))
+	extractor.EXPECT().Extract(gomock.Any(), gomock.Any(), gomock.Any()).Return(extract.Extraction{}, errors.New("model down"))
 	var saved domain.File
 	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
 		saved = f
@@ -128,7 +130,7 @@ func TestSettleRetryableExtractionRedrivesAndKeepsPending(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: staging, Status: domain.StatusPending}, nil)
 	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
 	blobs.EXPECT().Copy(gomock.Any(), staging, "files/"+hash).Return(nil)
-	extractor.EXPECT().Extract(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("bedrock extract: %w: throttled", extract.ErrRetryable))
+	extractor.EXPECT().Extract(gomock.Any(), gomock.Any(), gomock.Any()).Return(extract.Extraction{}, fmt.Errorf("bedrock extract: %w: throttled", extract.ErrRetryable))
 	// No Put, no Delete: the record stays pending and staging is kept so the event can redrive.
 
 	h := ingest.NewHandler(idx, blobs, extractor, mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl))

@@ -60,6 +60,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify pasted text against the owner's stored documents.
+         * @description Splits the text into atomic claims, matches each claim to a supporting span in the owner's files, and verifies every verbatim span in code, character for character, against the file's stored text. The pipeline runs asynchronously; poll the check by id.
+         */
+        post: operations["createCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/checks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one check with its claims and verdicts. */
+        get: operations["getCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/calls": {
         parameters: {
             query?: never;
@@ -195,6 +232,43 @@ export interface components {
         };
         CallsResponse: {
             calls: components["schemas"]["LlmCall"][];
+        };
+        CreateCheckRequest: {
+            /** @description The text to verify, roughly a pasted page or two. */
+            text: string;
+        };
+        Reference: {
+            fileId: string;
+            fileName: string;
+            /** @description The supporting passage, exactly as it appears in the file's stored text. */
+            spanText: string;
+            /** @description Byte offset of the span in the file's stored text, located by code. */
+            start: number;
+            end: number;
+            /** @enum {string} */
+            tier: "verbatim" | "paraphrase" | "none";
+            /** @description True only when code re-read the stored text at the offsets and matched the span character for character. A paraphrase is never verified; a human confirms it. */
+            verified: boolean;
+        };
+        Claim: {
+            text: string;
+            /** @description Byte offset of the claim in the check's own text, for highlighting. */
+            start: number;
+            end: number;
+            /** @enum {string} */
+            verdict: "verified" | "review" | "unsupported";
+            reference?: components["schemas"]["Reference"];
+        };
+        Check: {
+            id: string;
+            text: string;
+            /** @enum {string} */
+            status: "pending" | "running" | "done" | "failed";
+            claims?: components["schemas"]["Claim"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
         };
         Error: {
             error: string;
@@ -371,6 +445,54 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+        };
+    };
+    createCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Check accepted and queued. Poll GET /checks/{id} for verdicts. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Check"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    getCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The check, with claims once the pipeline has run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Check"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listCalls: {

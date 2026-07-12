@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	extract "github.com/kazemisoroush/vault/backend/internal/extract"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,10 +42,10 @@ func (m *MockExtractor) EXPECT() *MockExtractorMockRecorder {
 }
 
 // Extract mocks base method.
-func (m *MockExtractor) Extract(ctx context.Context, content []byte, contentType string) (map[string]string, error) {
+func (m *MockExtractor) Extract(ctx context.Context, content []byte, contentType string) (extract.Extraction, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Extract", ctx, content, contentType)
-	ret0, _ := ret[0].(map[string]string)
+	ret0, _ := ret[0].(extract.Extraction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/api/middleware"
 	"github.com/kazemisoroush/vault/backend/internal/auth"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
+	"github.com/kazemisoroush/vault/backend/internal/checks"
 	"github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
@@ -19,10 +20,11 @@ import (
 )
 
 // NewHandler builds the API handler: controllers behind the router, wrapped in middleware.
-func NewHandler(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, store vectors.Store, answerer agent.Answerer, calls controller.CallLister, emitter telemetry.Emitter) (http.Handler, error) {
+func NewHandler(ctx context.Context, cfg config.Config, idx index.Index, blobs blob.Store, store vectors.Store, answerer agent.Answerer, checkStore checks.Store, enqueuer checks.Enqueuer, calls controller.CallLister, emitter telemetry.Emitter) (http.Handler, error) {
 	router := NewRouter(
 		controller.NewFileController(idx, blobs, store),
 		controller.NewAskController(answerer, blobs),
+		controller.NewCheckController(checkStore, enqueuer),
 		controller.NewCallsController(calls),
 		controller.NewHealthController(),
 		controller.NewMetricsController(emitter),

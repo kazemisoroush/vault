@@ -31,3 +31,27 @@ func parseMeta(reply string) (map[string]string, error) {
 	}
 	return meta, nil
 }
+
+// transcriptionFromReply parses a transcribing reply's {"meta": ..., "text": ...} object,
+// returning empty values when the model declined so ingest still lands the file record.
+func transcriptionFromReply(reply string) (map[string]string, string) {
+	start := strings.Index(reply, "{")
+	end := strings.LastIndex(reply, "}")
+	if start < 0 || end < 0 || end < start {
+		log.Printf("transcription produced no JSON (the model may have declined)")
+		return map[string]string{}, ""
+	}
+
+	var parsed struct {
+		Meta map[string]string `json:"meta"`
+		Text string            `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(reply[start:end+1]), &parsed); err != nil {
+		log.Printf("transcription reply did not decode: %v", err)
+		return map[string]string{}, ""
+	}
+	if parsed.Meta == nil {
+		parsed.Meta = map[string]string{}
+	}
+	return parsed.Meta, parsed.Text
+}

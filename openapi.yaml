@@ -114,6 +114,47 @@ paths:
                 $ref: '#/components/schemas/AskResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /checks:
+    post:
+      operationId: createCheck
+      summary: Verify pasted text against the owner's stored documents.
+      description: >
+        Splits the text into atomic claims, matches each claim to a supporting span in the
+        owner's files, and verifies every verbatim span in code, character for character,
+        against the file's stored text. The pipeline runs asynchronously; poll the check by id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckRequest'
+      responses:
+        '202':
+          description: Check accepted and queued. Poll GET /checks/{id} for verdicts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Check'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /checks/{id}:
+    get:
+      operationId: getCheck
+      summary: Get one check with its claims and verdicts.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The check, with claims once the pipeline has run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Check'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /calls:
     get:
       operationId: listCalls
@@ -269,6 +310,64 @@ components:
         calls:
           type: array
           items: { $ref: '#/components/schemas/LlmCall' }
+    CreateCheckRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          maxLength: 20000
+          description: The text to verify, roughly a pasted page or two.
+    Reference:
+      type: object
+      required: [fileId, fileName, spanText, start, end, tier, verified]
+      properties:
+        fileId: { type: string }
+        fileName: { type: string }
+        spanText:
+          type: string
+          description: The supporting passage, exactly as it appears in the file's stored text.
+        start:
+          type: integer
+          description: Byte offset of the span in the file's stored text, located by code.
+        end:
+          type: integer
+        tier:
+          type: string
+          enum: [verbatim, paraphrase, none]
+        verified:
+          type: boolean
+          description: >
+            True only when code re-read the stored text at the offsets and matched the span
+            character for character. A paraphrase is never verified; a human confirms it.
+    Claim:
+      type: object
+      required: [text, start, end, verdict]
+      properties:
+        text: { type: string }
+        start:
+          type: integer
+          description: Byte offset of the claim in the check's own text, for highlighting.
+        end:
+          type: integer
+        verdict:
+          type: string
+          enum: [verified, review, unsupported]
+        reference: { $ref: '#/components/schemas/Reference' }
+    Check:
+      type: object
+      required: [id, text, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        status:
+          type: string
+          enum: [pending, running, done, failed]
+        claims:
+          type: array
+          items: { $ref: '#/components/schemas/Claim' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     Error:
       type: object
       required: [error]
