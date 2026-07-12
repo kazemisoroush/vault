@@ -79,6 +79,13 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string) error {
 
 	meta, err := h.extractor.Extract(ctx, content, contentType)
 	if err != nil {
+		if errors.Is(err, extract.ErrRetryable) {
+			// Extraction is throttled or briefly unavailable. Leave the pending record and
+			// staging object untouched and fail the invocation, so the S3 event is redriven
+			// later instead of losing the file to a terminal failed state.
+			log.Printf("extraction throttled for %s, will retry: %v", hash, err)
+			return fmt.Errorf("extract %s: %w", hash, err)
+		}
 		log.Printf("extraction failed for %s: %v", hash, err)
 		if _, err := h.save(ctx, file, domain.StatusFailed, nil); err != nil {
 			return err

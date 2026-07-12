@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscognito"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3notifications"
 	golambda "github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2"
@@ -179,6 +180,14 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		),
 		Resources: jsii.Strings(vectorArn, vectorArn+"/index/"+vectorIndexName),
 	}))
+
+	// Ingest runs as an async invocation from the S3 event. When extraction is throttled the
+	// handler returns an error on purpose, so let Lambda redrive the event a few times over a
+	// bounded window rather than losing the file to a terminal failure.
+	fn.ConfigureAsyncInvoke(&awslambda.EventInvokeConfigOptions{
+		RetryAttempts: jsii.Number(2),
+		MaxEventAge:   awscdk.Duration_Minutes(jsii.Number(15)),
+	})
 
 	// Watch only the staging prefix so the content-addressed copy under files/ does not re-trigger ingest.
 	bucket.AddEventNotification(
