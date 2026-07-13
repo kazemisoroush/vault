@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -30,30 +30,40 @@ describe("FileList", () => {
     expect(screen.getByText("pending")).toBeInTheDocument();
   });
 
-  it("deletes a file only after confirming", async () => {
+  it("deletes only on the second tap of the same button", async () => {
     // Arrange
     const onDelete = vi.fn();
     render(<FileList files={files} onDelete={onDelete} />);
 
-    // Act: open the confirm, then confirm
+    // Act: first tap arms (the label flips to a confirm), still no delete.
     await userEvent.click(screen.getByRole("button", { name: /delete receipt.jpg/i }));
     expect(onDelete).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const confirm = screen.getByRole("button", { name: /confirm delete receipt.jpg/i });
+
+    // Act: second tap on the same button deletes.
+    await userEvent.click(confirm);
 
     // Assert
     expect(onDelete).toHaveBeenCalledWith("1");
   });
 
-  it("cancels without deleting", async () => {
+  it("reverts to the trash icon if the confirm window passes without a second tap", async () => {
     // Arrange
-    const onDelete = vi.fn();
-    render(<FileList files={files} onDelete={onDelete} />);
+    vi.useFakeTimers();
+    try {
+      const onDelete = vi.fn();
+      render(<FileList files={files} onDelete={onDelete} />);
 
-    // Act
-    await userEvent.click(screen.getByRole("button", { name: /delete contract.pdf/i }));
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      // Act: arm, then let the window elapse.
+      fireEvent.click(screen.getByRole("button", { name: /delete contract.pdf/i }));
+      expect(screen.getByRole("button", { name: /confirm delete contract.pdf/i })).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(5000));
 
-    // Assert
-    expect(onDelete).not.toHaveBeenCalled();
+      // Assert: it is back to a plain delete control and nothing was deleted.
+      expect(screen.getByRole("button", { name: /^delete contract.pdf/i })).toBeInTheDocument();
+      expect(onDelete).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
