@@ -1,9 +1,12 @@
 "use client";
 
-import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 
-// DropZone accepts one or many files by drag-and-drop or click, and hands them to onFiles. While
-// busy it shows a spinner and, when known, how many files are still uploading.
+import { collectFiles, filterFiles } from "../lib/files/collectFiles";
+
+// DropZone accepts files or whole folders, by drag-and-drop or by picker, and hands the flattened
+// list to onFiles. A dropped folder is walked into its files; storage stays flat. While busy it
+// shows a spinner, and it shows a brief reading state while a large folder is being walked.
 export function DropZone({
   onFiles,
   busy,
@@ -14,23 +17,58 @@ export function DropZone({
   pending?: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
+  const [reading, setReading] = useState(false);
+  const active = busy || reading;
+
+  // webkitdirectory is not a typed React attribute, so set it on the folder picker after mount.
+  useEffect(() => {
+    folderRef.current?.setAttribute("webkitdirectory", "");
+  }, []);
 
   function open() {
-    if (busy) return;
+    if (active) return;
     inputRef.current?.click();
   }
 
+  function openFolder() {
+    if (active) return;
+    folderRef.current?.click();
+  }
+
+  // hand feeds a flat picked list (files or a folder's files) through the shared skip rules.
   function hand(list: FileList | null) {
-    const files = Array.from(list ?? []);
+    const files = filterFiles(Array.from(list ?? []));
     if (files.length > 0) onFiles(files);
   }
 
-  function handleDrop(event: DragEvent) {
+  async function handleDrop(event: DragEvent) {
     event.preventDefault();
     setOver(false);
-    if (busy) return;
-    hand(event.dataTransfer.files);
+    if (active) return;
+
+    // The entries must be read from the items synchronously; they expire once the event returns.
+    const items = event.dataTransfer.items;
+    const entries = items
+      ? Array.from(items)
+          .map((item) => (typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null))
+          .filter((entry): entry is FileSystemEntry => entry !== null)
+      : [];
+
+    if (entries.length === 0) {
+      // No entries API available: fall back to the flat file list, which cannot see into folders.
+      hand(event.dataTransfer.files);
+      return;
+    }
+
+    setReading(true);
+    try {
+      const files = await collectFiles(entries);
+      if (files.length > 0) onFiles(files);
+    } finally {
+      setReading(false);
+    }
   }
 
   function handleKey(event: KeyboardEvent) {
@@ -40,16 +78,22 @@ export function DropZone({
     }
   }
 
-  const label = busy ? (pending && pending > 0 ? `Uploading ${pending}…` : "Uploading…") : "Drop files here";
+  const label = reading
+    ? "Reading folder…"
+    : busy
+      ? pending && pending > 0
+        ? `Uploading ${pending}…`
+        : "Uploading…"
+      : "Drop files or a folder here";
 
   return (
     <div
       className={over ? "dropzone over" : "dropzone"}
       role="button"
       tabIndex={0}
-      aria-label="Add files to the vault"
-      aria-disabled={busy}
-      aria-busy={busy}
+      aria-label="Add files or a folder to the vault"
+      aria-disabled={active}
+      aria-busy={active}
       onClick={open}
       onKeyDown={handleKey}
       onDragOver={(event) => {
@@ -69,7 +113,16 @@ export function DropZone({
           event.target.value = "";
         }}
       />
-      {busy ? (
+      <input
+        ref={folderRef}
+        type="file"
+        hidden
+        onChange={(event) => {
+          hand(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      {active ? (
         <svg className="spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeOpacity="0.25" />
           <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -87,7 +140,21 @@ export function DropZone({
         </svg>
       )}
       <strong>{label}</strong>
-      <span className="hint">or click to choose · drop several at once · the vault reads them for you</span>
+      <span className="hint">
+        click to choose, or{" "}
+        <button
+          type="button"
+          className="folderpick"
+          disabled={active}
+          onClick={(event) => {
+            event.stopPropagation();
+            openFolder();
+          }}
+        >
+          add a folder
+        </button>{" "}
+        · the vault reads them for you
+      </span>
     </div>
   );
 }
