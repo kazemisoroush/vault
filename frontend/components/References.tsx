@@ -12,7 +12,7 @@ function verdictLine(verdict: Claim["verdict"]): string {
     case "review":
       return "review: confirm the passage supports your wording";
     default:
-      return "unsupported: no passage was found for this sentence";
+      return "unsupported: no supporting passage was confirmed";
   }
 }
 

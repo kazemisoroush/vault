@@ -25,7 +25,7 @@ export function RecordPanel({
               <li key={file.id} className="record-doc">
                 <span className={`dot ${file.status}`} aria-hidden="true" />
                 <span className="name">{file.name}</span>
-                <span className="state">{file.status === "ready" ? "text stored" : file.status}</span>
+                <span className="state">{file.status}</span>
               </li>
             ))}
           </ul>

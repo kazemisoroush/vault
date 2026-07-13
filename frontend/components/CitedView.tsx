@@ -61,16 +61,22 @@ export function CitedView({
       if (!id) return;
       getCheck(api, id)
         .then((fetched) => {
+          // A response for a reset or superseded check is ignored, errors included.
+          if (checkID.current !== id) return;
           setError(null);
           setCheck((previous) => {
             // A stale or out-of-order response must never revert a landed check.
             if (previous && (previous.status === "done" || previous.status === "failed")) {
               return previous;
             }
-            return fetched.id === checkID.current ? fetched : previous;
+            return fetched;
           });
+          if (fetched.status === "done" || fetched.status === "failed") {
+            checkID.current = null;
+          }
         })
         .catch((err: unknown) => {
+          if (checkID.current !== id) return;
           setError(err instanceof Error ? err.message : "could not read the check");
         });
     }, pollMs);

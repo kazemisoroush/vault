@@ -18,7 +18,7 @@ describe("References", () => {
     render(<References claim={claim} onBack={() => undefined} />);
 
     // Assert
-    expect(screen.getByText(/unsupported: no passage was found/)).toBeInTheDocument();
+    expect(screen.getByText(/unsupported: no supporting passage was confirmed/)).toBeInTheDocument();
     expect(screen.getByText(/silence is where to look hardest/)).toBeInTheDocument();
   });
 
