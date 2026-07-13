@@ -108,6 +108,9 @@ export function DropZone({
         type="file"
         multiple
         hidden
+        // The inputs are children of the clickable dropzone, so a programmatic .click() dispatches a
+        // click that would bubble to the dropzone's onClick and open a second picker. Stop it here.
+        onClick={(event) => event.stopPropagation()}
         onChange={(event) => {
           hand(event.target.files);
           event.target.value = "";
@@ -117,6 +120,7 @@ export function DropZone({
         ref={folderRef}
         type="file"
         hidden
+        onClick={(event) => event.stopPropagation()}
         onChange={(event) => {
           hand(event.target.files);
           event.target.value = "";
