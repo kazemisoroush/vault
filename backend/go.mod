@@ -20,6 +20,7 @@ require (
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
+	golang.org/x/image v0.23.0
 	rsc.io/pdf v0.1.1
 )
 
