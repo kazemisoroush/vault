@@ -48,6 +48,23 @@ describe("collectFiles", () => {
     expect(files.map((f) => f.name).sort()).toEqual(["note.txt", "photo.jpg"]);
   });
 
+  it("skips a single unreadable entry rather than losing the whole drop", async () => {
+    // Arrange: one file entry errors when its File is read.
+    const broken: FsEntry = {
+      isFile: true,
+      isDirectory: false,
+      name: "broken",
+      file: (_ok, err) => err?.(new Error("read failed")),
+    };
+    const tree: FsEntry[] = [dirEntry("album", [[fileEntry("photo.jpg"), broken, fileEntry("note.txt")]])];
+
+    // Act
+    const files = await collectFiles(tree);
+
+    // Assert: the good files still come through.
+    expect(files.map((f) => f.name).sort()).toEqual(["note.txt", "photo.jpg"]);
+  });
+
   it("drains a directory that returns its children across several batches", async () => {
     // Arrange: the reader serves two batches before it empties.
     const tree: FsEntry[] = [dirEntry("big", [[fileEntry("a"), fileEntry("b")], [fileEntry("c")]])];

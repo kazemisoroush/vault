@@ -50,17 +50,33 @@ async function readAll(reader: DirEntryReader): Promise<FsEntry[]> {
   return all;
 }
 
-// collectFiles walks the entries depth-first into a flat, filtered list of files.
+// dropEntries adapts a drop event's items into filesystem entries. It must be called synchronously
+// inside the drop handler, because the items expire once the event returns. It sits here, next to
+// the walk, so the whole filesystem boundary lives in one place.
+export function dropEntries(items: DataTransferItemList | null): FsEntry[] {
+  if (!items) return [];
+  return Array.from(items)
+    .map((item) => (typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null))
+    .filter((entry): entry is FileSystemEntry => entry !== null);
+}
+
+// collectFiles walks the entries depth-first into a flat, filtered list of files. A single entry
+// that cannot be read is skipped rather than failing the whole walk, so one bad file does not lose
+// the entire dropped folder.
 export async function collectFiles(entries: FsEntry[]): Promise<File[]> {
   const files: File[] = [];
   for (const entry of entries) {
-    if (entry.isDirectory) {
-      if (isSystemDir(entry.name) || !entry.createReader) continue;
-      const children = await readAll(entry.createReader());
-      files.push(...(await collectFiles(children)));
-    } else if (entry.isFile) {
-      const file = await entryFile(entry);
-      if (keepFile(file)) files.push(file);
+    try {
+      if (entry.isDirectory) {
+        if (isSystemDir(entry.name) || !entry.createReader) continue;
+        const children = await readAll(entry.createReader());
+        files.push(...(await collectFiles(children)));
+      } else if (entry.isFile) {
+        const file = await entryFile(entry);
+        if (keepFile(file)) files.push(file);
+      }
+    } catch {
+      // Skip this unreadable entry and keep walking the rest.
     }
   }
   return files;
@@ -71,7 +87,7 @@ export async function collectFiles(entries: FsEntry[]): Promise<File[]> {
 export function filterFiles(files: File[]): File[] {
   return files.filter((file) => {
     const path = (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? "";
-    if (path.split("/").some((segment) => segment === "__MACOSX")) return false;
+    if (path.split("/").some(isSystemDir)) return false;
     return keepFile(file);
   });
 }

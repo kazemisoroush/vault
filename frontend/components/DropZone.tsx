@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 
-import { collectFiles, filterFiles } from "../lib/files/collectFiles";
+import { collectFiles, dropEntries, filterFiles } from "../lib/files/collectFiles";
 
 // DropZone accepts files or whole folders, by drag-and-drop or by picker, and hands the flattened
 // list to onFiles. A dropped folder is walked into its files; storage stays flat. While busy it
@@ -38,7 +38,7 @@ export function DropZone({
   }
 
   // hand feeds a flat picked list (files or a folder's files) through the shared skip rules.
-  function hand(list: FileList | null) {
+  function hand(list: FileList | File[] | null) {
     const files = filterFiles(Array.from(list ?? []));
     if (files.length > 0) onFiles(files);
   }
@@ -48,17 +48,14 @@ export function DropZone({
     setOver(false);
     if (active) return;
 
-    // The entries must be read from the items synchronously; they expire once the event returns.
-    const items = event.dataTransfer.items;
-    const entries = items
-      ? Array.from(items)
-          .map((item) => (typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null))
-          .filter((entry): entry is FileSystemEntry => entry !== null)
-      : [];
+    // Read the entries and a flat-file snapshot from the event synchronously; both expire once the
+    // event returns, so they cannot be read after the await below.
+    const entries = dropEntries(event.dataTransfer.items);
+    const flat = Array.from(event.dataTransfer.files);
 
     if (entries.length === 0) {
       // No entries API available: fall back to the flat file list, which cannot see into folders.
-      hand(event.dataTransfer.files);
+      hand(flat);
       return;
     }
 
@@ -66,6 +63,9 @@ export function DropZone({
     try {
       const files = await collectFiles(entries);
       if (files.length > 0) onFiles(files);
+    } catch {
+      // The walk failed outright; fall back to the flat files the drop also carried.
+      hand(flat);
     } finally {
       setReading(false);
     }
