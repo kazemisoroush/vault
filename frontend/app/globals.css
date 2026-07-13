@@ -517,6 +517,7 @@ body {
   gap: 12px;
   padding: 10px 11px;
   border-radius: 9px;
+  min-width: 0;
 }
 
 .files li:hover {
@@ -534,6 +535,7 @@ body {
 .files .trash {
   display: inline-grid;
   place-items: center;
+  flex: none;
   width: 28px;
   height: 28px;
   border: none;
@@ -563,6 +565,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: none;
 }
 
 .rowactions .danger {
@@ -606,6 +609,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: none;
 }
 
 .badge::before {
