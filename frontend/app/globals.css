@@ -481,6 +481,28 @@ body {
   font-size: 13px;
 }
 
+/* The folder picker reads as an inline link within the hint, not a heavy button. */
+.folderpick {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.folderpick:hover {
+  color: var(--accent-strong);
+}
+
+.folderpick:disabled {
+  color: var(--faint);
+  cursor: default;
+  text-decoration: none;
+}
+
 .files {
   list-style: none;
   margin: 6px 0 0;
