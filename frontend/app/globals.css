@@ -561,42 +561,15 @@ body {
   height: 16px;
 }
 
-.rowactions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-
-.rowactions .danger {
-  border: 1px solid var(--fail);
-  background: var(--fail-soft);
+/* Armed delete: the trash icon becomes a visible red check for the confirm window, and keeps the
+   same 28px footprint so the row never shifts. */
+.files .trash.armed {
+  opacity: 1;
   color: var(--fail);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 3px 12px;
-  border-radius: 8px;
-  cursor: pointer;
 }
 
-.rowactions .danger:hover {
-  background: var(--fail);
-  color: var(--on-accent);
-}
-
-.rowactions .link {
-  border: none;
-  background: none;
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 13px;
-  padding: 3px 4px;
-  cursor: pointer;
-}
-
-.rowactions .link:hover {
-  color: var(--ink);
+.files .trash.armed:hover {
+  background: var(--fail-soft);
 }
 
 .badge {
