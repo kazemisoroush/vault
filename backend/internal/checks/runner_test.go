@@ -164,6 +164,55 @@ func TestRunEmptyFindingsStayUnsupported(t *testing.T) {
 	assert.Equal(t, domain.VerdictUnsupported, check.Claims[0].Verdict)
 }
 
+func TestRunLexicalRescuesAnExactValueTheVectorSearchMissed(t *testing.T) {
+	// Arrange: the claim keys on an identifier. The vector search ranks only a decoy without the
+	// number, but the passport file carries it in metadata, so the literal source must surface the
+	// passport for the judge and the claim must find support it would otherwise miss.
+	ctrl := gomock.NewController(t)
+	store := mocks.NewMockCheckStore(ctrl)
+	idx := mocks.NewMockIndex(ctrl)
+	blobs := mocks.NewMockStore(ctrl)
+	embedder := mocks.NewMockEmbedder(ctrl)
+	vectors := mocks.NewMockVectorStore(ctrl)
+	model := mocks.NewMockConverser(ctrl)
+
+	claim := "Soroush Kazemi's Australian passport number is RA3495037."
+	check := &domain.Check{ID: "chk-1", OwnerID: "alice", Text: claim, Status: domain.CheckPending}
+	store.EXPECT().Get(gomock.Any(), "chk-1").Return(*check, nil)
+	store.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, c domain.Check) error {
+		*check = c
+		return nil
+	}).AnyTimes()
+
+	// The vector search returns only a decoy file that does not contain the number.
+	decoy := domain.File{ID: "license", OwnerID: "alice", Name: "Driving License.jpg"}
+	embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return([]float32{0.5}, nil).AnyTimes()
+	vectors.EXPECT().Query(gomock.Any(), "alice", gomock.Any(), gomock.Any()).Return([]string{"license"}, nil).AnyTimes()
+	idx.EXPECT().Get(gomock.Any(), "license").Return(decoy, nil).AnyTimes()
+	blobs.EXPECT().Get(gomock.Any(), "text/license").Return([]byte("a driving license, no passport number here"), "text/plain", nil).AnyTimes()
+
+	// The literal scan lists the owner's files; only the passport carries the number, in its metadata.
+	passport := domain.File{ID: "passport", OwnerID: "alice", Name: "IMG_4326.JPG", Meta: map[string]string{"passport_number": "RA3495037"}}
+	idx.EXPECT().List(gomock.Any(), "alice", gomock.Any(), "").Return([]domain.File{decoy, passport}, "", nil)
+	blobs.EXPECT().Get(gomock.Any(), "text/passport").Return([]byte("Document No. RA3495037 KAZEMI SOROUSH"), "text/plain", nil).AnyTimes()
+
+	// The judge quotes the number from the passport candidate the literal source added.
+	model.EXPECT().Converse(gomock.Any(), gomock.Any()).
+		Return(`[{"fileId": "passport", "span": "RA3495037", "relation": "paraphrase"}]`, nil)
+
+	runner := checks.NewRunner(store, idx, blobs, embedder, vectors, model)
+
+	// Act
+	require.NoError(t, runner.Run(context.Background(), "chk-1", "alice"))
+
+	// Assert: the passport, reached only through the literal source, supports the claim.
+	require.Len(t, check.Claims, 1)
+	got := check.Claims[0]
+	assert.Equal(t, domain.VerdictReview, got.Verdict)
+	require.Len(t, got.References, 1)
+	assert.Equal(t, "passport", got.References[0].FileID)
+}
+
 func TestRunRefusesForeignOwner(t *testing.T) {
 	// Arrange: the task claims an owner the check does not belong to.
 	ctrl := gomock.NewController(t)

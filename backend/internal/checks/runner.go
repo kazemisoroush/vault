@@ -237,9 +237,30 @@ func normalizeForMatch(text string) string {
 	return strings.ToLower(strings.Trim(collapsed, " .,;:!?\"'"))
 }
 
-// candidates finds the owner's files most likely to bear on the claim and loads their stored
-// text. Files without stored text (dropped before text persistence existed) are skipped.
+// candidates gathers every file that may bear on a claim: those nearest by meaning, plus those that
+// literally contain a distinctive value from the claim, such as an identifier. The two sources are
+// merged and deduplicated by file, so a file found by both appears once. The literal source rescues
+// exact-value claims that a meaning search ranks too low to reach, and the gate keeps either source
+// from ever producing a false green.
 func (r *Runner) candidates(ctx context.Context, ownerID string, claim string) []candidate {
+	merged := r.vectorCandidates(ctx, ownerID, claim)
+	seen := make(map[string]struct{}, len(merged))
+	for _, c := range merged {
+		seen[c.FileID] = struct{}{}
+	}
+	for _, c := range r.lexicalCandidates(ctx, ownerID, claim) {
+		if _, ok := seen[c.FileID]; ok {
+			continue
+		}
+		seen[c.FileID] = struct{}{}
+		merged = append(merged, c)
+	}
+	return merged
+}
+
+// vectorCandidates finds the owner's files nearest the claim by meaning and loads their stored text.
+// Files without stored text (dropped before text persistence existed) are skipped.
+func (r *Runner) vectorCandidates(ctx context.Context, ownerID string, claim string) []candidate {
 	vector, err := r.embedder.Embed(ctx, claim)
 	if err != nil {
 		log.Printf("embed claim (%d chars): %v", len(claim), err)
