@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Fraunces, Hanken_Grotesk, IBM_Plex_Mono } from "next/font/google";
+import { Hanken_Grotesk } from "next/font/google";
 
 import { AuthProvider } from "../lib/auth/context";
 import { MODE_STORAGE_KEY } from "../lib/mode";
 import { THEME_STORAGE_KEY } from "../lib/theme";
 import "./globals.css";
 
-const display = Fraunces({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-display" });
-const body = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-body" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
+// One typeface carries the whole app. globals.css aliases the display and mono roles to this same
+// family, so every surface reads in one consistent voice instead of mixing a serif and a monospace.
+const body = Hanken_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "Vault",
@@ -20,7 +20,7 @@ const themeScript = `(function(){try{var t=localStorage.getItem('${THEME_STORAGE
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
+    <html lang="en" className={body.variable}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
