@@ -16,8 +16,8 @@ import (
 // scaled to fit. maxImagePixels caps how big an image we will decode, so a compression bomb (a tiny
 // file that decodes to a huge bitmap) cannot exhaust the function's memory.
 const (
-	maxImageEdgePixels   = 1568
-	maxImagePixels = 100_000_000
+	maxImageEdgePixels = 1568
+	maxImagePixels     = 100_000_000
 )
 
 // imageBlock returns the model content part for an image, downscaling and re-encoding one that is
