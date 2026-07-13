@@ -12,13 +12,12 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
-// Image limits keep an oversized image within the model's per-image size cap. maxImageBytes is the
-// raw-byte budget that keeps the base64 payload under the roughly 5 MB per-image limit, since base64
-// inflates bytes by about 4/3. maxImageEdge is the longest side the model keeps before it downscales
-// anyway.
+// maxImageEdge is the longest side the model keeps before it downscales anyway, so a larger image is
+// scaled to fit. maxImagePixels caps how big an image we will decode, so a compression bomb (a tiny
+// file that decodes to a huge bitmap) cannot exhaust the function's memory.
 const (
-	maxImageBytes = 3_600_000
-	maxImageEdge  = 1568
+	maxImageEdge   = 1568
+	maxImagePixels = 100_000_000
 )
 
 // imageBlock returns the model content part for an image, downscaling and re-encoding one that is
@@ -32,10 +31,14 @@ func imageBlock(content []byte, contentType string) llm.Part {
 }
 
 // shrinkImage downscales an oversized image to fit the per-image limit and returns it as JPEG bytes.
-// It returns ok=false when the image is already small enough or cannot be decoded, so the caller
-// sends the original.
+// It returns ok=false when the image is already small enough, is larger than the pixel cap, or
+// cannot be decoded, so the caller sends the original.
 func shrinkImage(content []byte) ([]byte, bool) {
-	if len(content) <= maxImageBytes {
+	if len(content) <= llm.MaxImageBytes {
+		return nil, false
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(content))
+	if err != nil || int64(config.Width)*int64(config.Height) > maxImagePixels {
 		return nil, false
 	}
 	source, _, err := image.Decode(bytes.NewReader(content))
@@ -45,13 +48,16 @@ func shrinkImage(content []byte) ([]byte, bool) {
 
 	bounds := scaledBounds(source.Bounds(), maxImageEdge)
 	scaled := image.NewRGBA(bounds)
-	xdraw.CatmullRom.Scale(scaled, bounds, source, source.Bounds(), xdraw.Src, nil)
+	// JPEG has no alpha, so flatten any transparency onto white rather than the zero value (black).
+	xdraw.Draw(scaled, bounds, image.White, image.Point{}, xdraw.Src)
+	xdraw.CatmullRom.Scale(scaled, bounds, source, source.Bounds(), xdraw.Over, nil)
 
 	return encodeUnderLimit(scaled)
 }
 
 // scaledBounds returns the destination rectangle for an image whose longest edge is capped at max,
-// keeping the aspect ratio. An image already within the cap keeps its size.
+// keeping the aspect ratio. An image already within the cap keeps its size, and each edge is at
+// least one pixel so an extreme aspect ratio does not round to an empty image.
 func scaledBounds(b image.Rectangle, max int) image.Rectangle {
 	width, height := b.Dx(), b.Dy()
 	longest := width
@@ -62,12 +68,20 @@ func scaledBounds(b image.Rectangle, max int) image.Rectangle {
 		return image.Rect(0, 0, width, height)
 	}
 	scale := float64(max) / float64(longest)
-	return image.Rect(0, 0, int(float64(width)*scale), int(float64(height)*scale))
+	return image.Rect(0, 0, atLeastOne(int(float64(width)*scale)), atLeastOne(int(float64(height)*scale)))
 }
 
-// encodeUnderLimit encodes the image as JPEG, dropping the quality until the result fits the raw
-// byte budget so the base64 payload stays under the limit. It returns ok=false only if nothing
-// could be encoded, which does not happen for a decoded image capped to maxImageEdge.
+// atLeastOne clamps a scaled edge to a minimum of one pixel.
+func atLeastOne(n int) int {
+	if n < 1 {
+		return 1
+	}
+	return n
+}
+
+// encodeUnderLimit encodes the image as JPEG, dropping the quality until the result fits the byte
+// budget so the base64 payload stays under the limit. It returns ok=false only if nothing could be
+// encoded, which does not happen for a decoded image capped to maxImageEdge.
 func encodeUnderLimit(img image.Image) ([]byte, bool) {
 	var best []byte
 	for quality := 85; quality >= 40; quality -= 15 {
@@ -76,7 +90,7 @@ func encodeUnderLimit(img image.Image) ([]byte, bool) {
 			continue
 		}
 		best = buf.Bytes()
-		if len(best) <= maxImageBytes {
+		if len(best) <= llm.MaxImageBytes {
 			return best, true
 		}
 	}

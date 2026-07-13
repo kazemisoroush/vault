@@ -6,6 +6,11 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
+// MaxImageBytes is the largest raw image the model accepts once Image base64-encodes it for the
+// request. Base64 inflates bytes by about 4/3, so this keeps the encoded payload under the model's
+// roughly 5 MB per-image limit.
+const MaxImageBytes = 3_600_000
+
 // Text is a plain text part.
 func Text(text string) Part {
 	return textPart{text: text}
