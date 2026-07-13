@@ -91,6 +91,12 @@ jobs:
   deploy:
     needs: [backend, frontend, infra]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Serialize deploys: CloudFormation allows one stack update at a time, so two
+    # merges landing close together must queue, not run concurrently. cancel-in-progress
+    # stays false so every merged commit still deploys, in order, rather than being dropped.
+    concurrency:
+      group: vault-deploy
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       id-token: write
