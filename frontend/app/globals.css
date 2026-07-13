@@ -820,8 +820,8 @@ body {
   color: var(--muted);
 }
 
-/* ===================== Cited: the legal face ===================== */
-/* Verdict colors are semantic and identical in both modes; only the ground changes. */
+/* ===================== Cited: one room, two verbs ===================== */
+/* Verdict colors are semantic and identical in both modes; only the verb changes. */
 :root {
   --verified: #2e6b4f;
   --verified-soft: #e2ede6;
@@ -842,37 +842,6 @@ body {
   --review-soft: rgba(199, 154, 75, 0.16);
   --unsupported: #e0826a;
   --unsupported-soft: rgba(224, 130, 106, 0.15);
-}
-
-/* Legal mode re-lights the room: ivory ledger and oxblood over the same structure. */
-[data-mode="legal"] {
-  --bg: #f2ecdf;
-  --surface: #fbf7ec;
-  --surface-2: #f6f0e2;
-  --ink: #2a231b;
-  --muted: #7a6e5c;
-  --faint: #a3987f;
-  --line: #e2d8c2;
-  --line-strong: #d3c7ab;
-  --accent: #6e2433;
-  --accent-strong: #591c28;
-  --accent-soft: #f0dfd8;
-  --on-accent: #f8efe4;
-}
-
-[data-mode="legal"][data-theme="dark"] {
-  --bg: #171114;
-  --surface: #1f171a;
-  --surface-2: #251b1f;
-  --ink: #ece2d4;
-  --muted: #a3937f;
-  --faint: #6f6355;
-  --line: #33262b;
-  --line-strong: #44323a;
-  --accent: #c4657a;
-  --accent-strong: #d68398;
-  --accent-soft: rgba(196, 101, 122, 0.14);
-  --on-accent: #2a1016;
 }
 
 .modetoggle {
@@ -901,107 +870,43 @@ body {
   color: var(--on-accent);
 }
 
-.cited {
-  display: grid;
-  grid-template-columns: minmax(240px, 2fr) 3fr;
-  gap: 18px;
-  align-items: start;
-}
-
-@media (max-width: 760px) {
-  .cited {
-    grid-template-columns: 1fr;
-  }
-}
-
-.record,
-.draft {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 18px 20px;
-  box-shadow: var(--shadow);
-}
-
-.record-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.record-doc {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 14px;
-}
-
-.record-doc:last-child {
-  border-bottom: 0;
-}
-
-.record-doc .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--faint);
-}
-
-.record-doc .dot.ready {
-  background: var(--verified);
-}
-
-.record-doc .dot.failed {
-  background: var(--unsupported);
-}
-
-.record-doc .name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.record-doc .state {
-  margin-left: auto;
-  font: 400 11px var(--font-mono);
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.draft-form {
-  display: flex;
+/* Both verbs share the same stacked shape: full-width field, centered button below. */
+.ask.stacked {
   flex-direction: column;
+  align-items: center;
   gap: 12px;
 }
 
-.draft-form textarea {
+.ask.stacked .field,
+.ask.stacked textarea {
   width: 100%;
+}
+
+.ask.stacked textarea {
   resize: vertical;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  background: var(--surface-2);
+  border-radius: 12px;
+  background: var(--surface);
   color: var(--ink);
   padding: 12px 14px;
   font: 400 14px/1.7 var(--font-body);
+  box-shadow: var(--shadow);
 }
 
-.draft-form textarea:focus-visible {
+.ask.stacked textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.draft-status {
+.check-status {
   color: var(--muted);
   font-size: 14px;
 }
 
-.draft-text {
-  font: 400 15px/2.1 var(--font-display);
+.check-result .check-text {
+  font: 400 15px/2.1 var(--font-body);
   color: var(--ink);
-  max-width: 60ch;
+  margin: 0 0 4px;
 }
 
 .claim {
@@ -1017,7 +922,7 @@ body {
   outline-offset: 1px;
 }
 
-.claim.sel {
+.claim.open {
   outline: 1.5px solid var(--accent);
   outline-offset: 1.5px;
 }
@@ -1045,91 +950,47 @@ body {
   text-decoration-thickness: 1px;
 }
 
-.verdict-rail,
-.legend {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.05em;
+/* References unfold inline, directly under the clicked sentence. */
+.inline-refs {
+  display: block;
+  margin: 10px 0 8px;
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 14px;
 }
 
-.verdict-rail {
-  margin: 0 0 12px;
-}
-
-.legend {
-  margin: 16px 0 0;
-  color: var(--muted);
-}
-
-.verdict-rail .verified,
-.legend .verified,
-.refs-verdict.verified {
-  color: var(--verified);
-}
-
-.verdict-rail .disputed,
-.legend .disputed,
-.refs-verdict.disputed {
-  color: var(--disputed);
-}
-
-.verdict-rail .review,
-.legend .review,
-.refs-verdict.review {
-  color: var(--review);
-}
-
-.verdict-rail .unsupported,
-.legend .unsupported,
-.refs-verdict.unsupported {
-  color: var(--unsupported);
-}
-
-.refs .back {
-  margin-bottom: 10px;
-}
-
-.refs-verdict {
+.inline-refs .refs-verdict {
+  display: block;
   font: 600 11px var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 
-.refs-claim {
-  margin: 0 0 14px;
-  padding: 4px 12px;
-  border-left: 3px solid var(--accent);
-  font: 400 14px/1.65 var(--font-display);
-}
+.refs-verdict.verified { color: var(--verified); }
+.refs-verdict.disputed { color: var(--disputed); }
+.refs-verdict.review { color: var(--review); }
+.refs-verdict.unsupported { color: var(--unsupported); }
 
-.refs-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.ref-card {
+.inline-refs .ref-card {
+  display: block;
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 13px;
+  border-radius: 9px;
+  padding: 9px 12px;
+  margin-bottom: 7px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.ref-head {
+.inline-refs .ref-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 6px;
+  margin-bottom: 4px;
   flex-wrap: wrap;
 }
 
-.ref-head .file {
+.inline-refs .file {
   font: 400 11px var(--font-mono);
   color: var(--muted);
 }
@@ -1142,34 +1003,39 @@ body {
   padding: 2px 9px;
 }
 
-.rel.verbatim {
-  background: var(--verified-soft);
-  color: var(--verified);
-}
+.rel.verbatim { background: var(--verified-soft); color: var(--verified); }
+.rel.paraphrase { background: var(--review-soft); color: var(--review); }
+.rel.contradicts { background: var(--disputed-soft); color: var(--disputed); }
 
-.rel.paraphrase {
-  background: var(--review-soft);
-  color: var(--review);
-}
-
-.rel.contradicts {
-  background: var(--disputed-soft);
-  color: var(--disputed);
-}
-
-.ref-span {
-  margin: 0;
-  font: 400 13.5px/1.7 var(--font-display);
+.inline-refs .ref-span {
+  display: block;
+  font-family: var(--font-display);
   color: var(--ink);
 }
 
-.empty {
+.inline-refs .empty {
+  display: block;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 13px;
   font-style: italic;
   line-height: 1.7;
 }
 
-.cited-error {
-  grid-column: 1 / -1;
+.verdict-rail {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.05em;
+  margin: 8px 0 12px;
+}
+
+.verdict-rail .verified { color: var(--verified); }
+.verdict-rail .disputed { color: var(--disputed); }
+.verdict-rail .review { color: var(--review); }
+.verdict-rail .unsupported { color: var(--unsupported); }
+
+.btn.another {
+  display: block;
+  margin: 0 auto;
 }

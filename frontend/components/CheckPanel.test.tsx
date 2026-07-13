@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ApiClient } from "../lib/api/client";
 import type { Check } from "../lib/checks/check";
-import { CitedView } from "./CitedView";
+import { CheckPanel } from "./CheckPanel";
 
 // encodeOffsets returns the UTF-8 byte range of part inside text, as the contract defines.
 function encodeOffsets(text: string, part: string): { start: number; end: number } {
@@ -51,8 +51,7 @@ const doneCheck: Check = {
   ],
 };
 
-// fakeApi answers POST /checks with a pending check and GET /checks/{id} with the finished one,
-// which drives the component through submit, poll, and render.
+// fakeApi answers POST /checks with a pending check and GET /checks/{id} with the finished one.
 function fakeApi(): ApiClient {
   return {
     POST: vi.fn().mockResolvedValue({ data: { ...doneCheck, status: "pending", claims: undefined } }),
@@ -60,28 +59,27 @@ function fakeApi(): ApiClient {
   } as unknown as ApiClient;
 }
 
-describe("CitedView", () => {
-  it("runs a check and renders the verdict highlight", async () => {
-    // Arrange: a fast real-timer poll so the finished check arrives within the test.
-    render(<CitedView api={fakeApi()} files={[]} pollMs={20} />);
+// runToDone drives the panel through paste, submit, and one fast poll to the finished check.
+async function runToDone() {
+  render(<CheckPanel api={fakeApi()} pollMs={20} />);
+  fireEvent.change(screen.getByLabelText("Text to check"), { target: { value: checkText } });
+  fireEvent.click(screen.getByRole("button", { name: "Check" }));
+  return screen.findByRole("button", { name: checkText });
+}
 
-    // Act: paste and submit, then let the poll fetch the finished check.
-    fireEvent.change(screen.getByLabelText("Text to check"), { target: { value: checkText } });
-    fireEvent.click(screen.getByRole("button", { name: "Check it" }));
-    await screen.findByText(/Checking…/);
+describe("CheckPanel", () => {
+  it("runs a check and renders the verdict highlight with the tally", async () => {
+    // Arrange + Act
+    const claim = await runToDone();
 
     // Assert
-    const claim = await screen.findByRole("button", { name: checkText });
     expect(claim.className).toContain("disputed");
     expect(screen.getByText("1 disputed")).toBeInTheDocument();
   });
 
-  it("shows the claim's references in the record panel on click", async () => {
+  it("unfolds references inline under the clicked sentence and folds them back", async () => {
     // Arrange
-    render(<CitedView api={fakeApi()} files={[]} pollMs={20} />);
-    fireEvent.change(screen.getByLabelText("Text to check"), { target: { value: checkText } });
-    fireEvent.click(screen.getByRole("button", { name: "Check it" }));
-    const claim = await screen.findByRole("button", { name: checkText });
+    const claim = await runToDone();
 
     // Act
     fireEvent.click(claim);
@@ -91,8 +89,20 @@ describe("CitedView", () => {
     expect(screen.getByText("paraphrase")).toBeInTheDocument();
     expect(screen.getByText(/the deposit was not paid within seven days/)).toBeInTheDocument();
 
-    // Act: back returns to the record list.
-    fireEvent.click(screen.getByRole("button", { name: "← The record" }));
-    expect(screen.getByText(/The record/)).toBeInTheDocument();
+    // Act: a second click folds the references away.
+    fireEvent.click(claim);
+    expect(screen.queryByText("contradicts")).not.toBeInTheDocument();
+  });
+
+  it("resets to a fresh paste field on Check another", async () => {
+    // Arrange
+    await runToDone();
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Check another" }));
+
+    // Assert
+    expect(screen.getByLabelText("Text to check")).toBeInTheDocument();
+    expect(screen.queryByText("1 disputed")).not.toBeInTheDocument();
   });
 });
