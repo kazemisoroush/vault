@@ -820,3 +820,357 @@ body {
   place-items: center;
   color: var(--muted);
 }
+
+/* ===================== Cited: the legal face ===================== */
+/* Verdict colors are semantic and identical in both modes; only the ground changes. */
+:root {
+  --verified: #2e6b4f;
+  --verified-soft: #e2ede6;
+  --disputed: #bc4b22;
+  --disputed-soft: #f6e3da;
+  --review: #a2691c;
+  --review-soft: #f3e8d4;
+  --unsupported: #8c2b2b;
+  --unsupported-soft: #f3dfdd;
+}
+
+[data-theme="dark"] {
+  --verified: #5cb389;
+  --verified-soft: rgba(92, 179, 137, 0.16);
+  --disputed: #d0693c;
+  --disputed-soft: rgba(208, 105, 60, 0.16);
+  --review: #c79a4b;
+  --review-soft: rgba(199, 154, 75, 0.16);
+  --unsupported: #e0826a;
+  --unsupported-soft: rgba(224, 130, 106, 0.15);
+}
+
+/* Legal mode re-lights the room: ivory ledger and oxblood over the same structure. */
+[data-mode="legal"] {
+  --bg: #f2ecdf;
+  --surface: #fbf7ec;
+  --surface-2: #f6f0e2;
+  --ink: #2a231b;
+  --muted: #7a6e5c;
+  --faint: #a3987f;
+  --line: #e2d8c2;
+  --line-strong: #d3c7ab;
+  --accent: #6e2433;
+  --accent-strong: #591c28;
+  --accent-soft: #f0dfd8;
+  --on-accent: #f8efe4;
+}
+
+[data-mode="legal"][data-theme="dark"] {
+  --bg: #171114;
+  --surface: #1f171a;
+  --surface-2: #251b1f;
+  --ink: #ece2d4;
+  --muted: #a3937f;
+  --faint: #6f6355;
+  --line: #33262b;
+  --line-strong: #44323a;
+  --accent: #c4657a;
+  --accent-strong: #d68398;
+  --accent-soft: rgba(196, 101, 122, 0.14);
+  --on-accent: #2a1016;
+}
+
+.modetoggle {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.modetoggle button {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font: 500 12px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.modetoggle button.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.cited {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) 3fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .cited {
+    grid-template-columns: 1fr;
+  }
+}
+
+.record,
+.draft {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+
+.record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.record-doc {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.record-doc:last-child {
+  border-bottom: 0;
+}
+
+.record-doc .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--faint);
+}
+
+.record-doc .dot.ready {
+  background: var(--verified);
+}
+
+.record-doc .dot.failed {
+  background: var(--unsupported);
+}
+
+.record-doc .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-doc .state {
+  margin-left: auto;
+  font: 400 11px var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.draft-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.draft-form textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  padding: 12px 14px;
+  font: 400 14px/1.7 var(--font-body);
+}
+
+.draft-form textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.draft-status {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.draft-text {
+  font: 400 15px/2.1 var(--font-display);
+  color: var(--ink);
+  max-width: 60ch;
+}
+
+.claim {
+  all: unset;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1.5px 4px;
+  font: inherit;
+}
+
+.claim:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.claim.sel {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 1.5px;
+}
+
+.claim.verified {
+  background: var(--verified-soft);
+  box-shadow: inset 0 -2px 0 var(--verified);
+}
+
+.claim.disputed {
+  background: var(--disputed-soft);
+  box-shadow: inset 0 -2px 0 var(--disputed);
+}
+
+.claim.review {
+  background: var(--review-soft);
+  box-shadow: inset 0 -2px 0 var(--review);
+}
+
+.claim.unsupported {
+  background: var(--unsupported-soft);
+  box-shadow: inset 0 -2px 0 var(--unsupported);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--unsupported) 55%, transparent);
+  text-decoration-thickness: 1px;
+}
+
+.verdict-rail,
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+.verdict-rail {
+  margin: 0 0 12px;
+}
+
+.legend {
+  margin: 16px 0 0;
+  color: var(--muted);
+}
+
+.verdict-rail .verified,
+.legend .verified,
+.refs-verdict.verified {
+  color: var(--verified);
+}
+
+.verdict-rail .disputed,
+.legend .disputed,
+.refs-verdict.disputed {
+  color: var(--disputed);
+}
+
+.verdict-rail .review,
+.legend .review,
+.refs-verdict.review {
+  color: var(--review);
+}
+
+.verdict-rail .unsupported,
+.legend .unsupported,
+.refs-verdict.unsupported {
+  color: var(--unsupported);
+}
+
+.refs .back {
+  margin-bottom: 10px;
+}
+
+.refs-verdict {
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 10px;
+}
+
+.refs-claim {
+  margin: 0 0 14px;
+  padding: 4px 12px;
+  border-left: 3px solid var(--accent);
+  font: 400 14px/1.65 var(--font-display);
+}
+
+.refs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ref-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 13px;
+}
+
+.ref-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  flex-wrap: wrap;
+}
+
+.ref-head .file {
+  font: 400 11px var(--font-mono);
+  color: var(--muted);
+}
+
+.rel {
+  font: 600 9.5px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.rel.verbatim {
+  background: var(--verified-soft);
+  color: var(--verified);
+}
+
+.rel.paraphrase {
+  background: var(--review-soft);
+  color: var(--review);
+}
+
+.rel.contradicts {
+  background: var(--disputed-soft);
+  color: var(--disputed);
+}
+
+.ref-span {
+  margin: 0;
+  font: 400 13.5px/1.7 var(--font-display);
+  color: var(--ink);
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.7;
+}
+
+.cited-error {
+  grid-column: 1 / -1;
+}
