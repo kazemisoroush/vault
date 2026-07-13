@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AskBox } from "../components/AskBox";
-import { CitedView } from "../components/CitedView";
+import { CheckPanel } from "../components/CheckPanel";
 import { DropZone } from "../components/DropZone";
 import { FileList } from "../components/FileList";
 import { ModeToggle } from "../components/ModeToggle";
@@ -148,7 +148,7 @@ export default function Home() {
   return (
     <main className="shell">
       <header className="topbar">
-        <Wordmark mode={mode} />
+        <Wordmark />
         <span className="spacer" />
         <ModeToggle mode={mode} onMode={setMode} />
         <ThemeToggle />
@@ -162,7 +162,7 @@ export default function Home() {
           <>
             <h1 className="greeting">Checked against your record</h1>
             <p className="sub">Paste any text. Every sentence answers to your documents.</p>
-            <CitedView api={api} files={files} />
+            <CheckPanel api={api} />
           </>
         )
       ) : (
@@ -172,17 +172,17 @@ export default function Home() {
 
           <AskBox onAsk={onAsk} busy={asking} />
           {outcome !== null && <Reply outcome={outcome} />}
-          {error && <p role="alert">{error}</p>}
-
-          <p className="eyebrow">Keep something new</p>
-          <div className="panel">
-            <DropZone onFiles={onFiles} busy={pending > 0} pending={pending} />
-            <FileList files={files} onDelete={onDelete} />
-          </div>
-
-          <Trace calls={calls} />
         </>
       )}
+      {error && <p role="alert">{error}</p>}
+
+      <p className="eyebrow">Keep something new</p>
+      <div className="panel">
+        <DropZone onFiles={onFiles} busy={pending > 0} pending={pending} />
+        <FileList files={files} onDelete={onDelete} />
+      </div>
+
+      <Trace calls={calls} />
     </main>
   );
 }

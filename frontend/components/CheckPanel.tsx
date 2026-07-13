@@ -6,24 +6,14 @@ import type { ApiClient } from "../lib/api/client";
 import type { Check } from "../lib/checks/check";
 import { createCheck } from "../lib/checks/createCheck";
 import { getCheck } from "../lib/checks/getCheck";
-import type { VaultFile } from "../lib/files/vaultFile";
-import { DraftPanel } from "./DraftPanel";
-import { RecordPanel } from "./RecordPanel";
+import { CheckBox } from "./CheckBox";
+import { CheckResult } from "./CheckResult";
 
 const defaultPollMs = 3000;
 
-// CitedView is the legal face: the record on the left, the draft being checked on the right.
-export function CitedView({
-  api,
-  files,
-  pollMs = defaultPollMs,
-}: {
-  api: ApiClient;
-  files: VaultFile[];
-  pollMs?: number;
-}) {
+// CheckPanel owns the check lifecycle: submit, poll until landed, render the result.
+export function CheckPanel({ api, pollMs = defaultPollMs }: { api: ApiClient; pollMs?: number }) {
   const [check, setCheck] = useState<Check | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const checkID = useRef<string | null>(null);
@@ -31,7 +21,6 @@ export function CitedView({
   const onReset = useCallback(() => {
     checkID.current = null;
     setCheck(null);
-    setSelected(null);
     setError(null);
   }, []);
 
@@ -39,7 +28,6 @@ export function CitedView({
     async (text: string) => {
       setSubmitting(true);
       setError(null);
-      setSelected(null);
       try {
         const created = await createCheck(api, text);
         checkID.current = created.id;
@@ -83,24 +71,22 @@ export function CitedView({
     return () => clearInterval(timer);
   }, [api, check, pollMs]);
 
-  const claim = check && selected !== null ? (check.claims ?? [])[selected] : undefined;
-
   return (
-    <div className="cited">
-      <RecordPanel files={files} claim={claim} onBack={() => setSelected(null)} />
-      <DraftPanel
-        check={check}
-        submitting={submitting}
-        selected={selected}
-        onCheck={onCheck}
-        onSelect={setSelected}
-        onReset={onReset}
-      />
-      {error && (
-        <p role="alert" className="cited-error">
-          {error}
-        </p>
+    <>
+      {check === null && <CheckBox onCheck={onCheck} busy={submitting} />}
+      {check !== null && (check.status === "pending" || check.status === "running") && (
+        <p className="check-status">Checking… every sentence is being matched against your documents.</p>
       )}
-    </div>
+      {check !== null && check.status === "failed" && (
+        <div className="panel check-result">
+          <p role="alert">This check failed to finish. Try a shorter text, or try again.</p>
+          <button className="btn" type="button" onClick={onReset}>
+            Check another
+          </button>
+        </div>
+      )}
+      {check !== null && check.status === "done" && <CheckResult check={check} onReset={onReset} />}
+      {error && <p role="alert">{error}</p>}
+    </>
   );
 }
