@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AskBox } from "../components/AskBox";
+import { CitedView } from "../components/CitedView";
 import { DropZone } from "../components/DropZone";
 import { FileList } from "../components/FileList";
+import { ModeToggle } from "../components/ModeToggle";
 import { Reply } from "../components/Reply";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { Trace } from "../components/Trace";
@@ -13,6 +15,7 @@ import { Wordmark } from "../components/Wordmark";
 import { ask } from "../lib/ask/ask";
 import type { AskOutcome } from "../lib/ask/askOutcome";
 import { useAuth } from "../lib/auth/context";
+import type { Mode } from "../lib/mode";
 import { listCalls } from "../lib/calls/listCalls";
 import type { LlmCall } from "../lib/calls/llmCall";
 import { deleteFile } from "../lib/files/deleteFile";
@@ -32,6 +35,14 @@ export default function Home() {
   const [outcome, setOutcome] = useState<AskOutcome | null>(null);
   const [asking, setAsking] = useState(false);
   const [calls, setCalls] = useState<LlmCall[]>([]);
+  const [mode, setMode] = useState<Mode>("personal");
+
+  // The pre-paint script stamps the persisted mode; reading it before paint avoids a flash.
+  useLayoutEffect(() => {
+    if (document.documentElement.dataset.mode === "legal") {
+      setMode("legal");
+    }
+  }, []);
 
   useEffect(() => {
     if (ready && !authenticated) {
@@ -137,28 +148,41 @@ export default function Home() {
   return (
     <main className="shell">
       <header className="topbar">
-        <Wordmark />
+        <Wordmark mode={mode} />
         <span className="spacer" />
+        <ModeToggle mode={mode} onMode={setMode} />
         <ThemeToggle />
         <button className="ghost" onClick={signOut}>
           Sign out
         </button>
       </header>
 
-      <h1 className="greeting">Your vault</h1>
-      <p className="sub">Ask for anything, or drop a file to keep it.</p>
+      {mode === "legal" ? (
+        api && (
+          <>
+            <h1 className="greeting">Checked against your record</h1>
+            <p className="sub">Paste any text. Every sentence answers to your documents.</p>
+            <CitedView api={api} files={files} />
+          </>
+        )
+      ) : (
+        <>
+          <h1 className="greeting">Your vault</h1>
+          <p className="sub">Ask for anything, or drop a file to keep it.</p>
 
-      <AskBox onAsk={onAsk} busy={asking} />
-      {outcome !== null && <Reply outcome={outcome} />}
-      {error && <p role="alert">{error}</p>}
+          <AskBox onAsk={onAsk} busy={asking} />
+          {outcome !== null && <Reply outcome={outcome} />}
+          {error && <p role="alert">{error}</p>}
 
-      <p className="eyebrow">Keep something new</p>
-      <div className="panel">
-        <DropZone onFiles={onFiles} busy={pending > 0} pending={pending} />
-        <FileList files={files} onDelete={onDelete} />
-      </div>
+          <p className="eyebrow">Keep something new</p>
+          <div className="panel">
+            <DropZone onFiles={onFiles} busy={pending > 0} pending={pending} />
+            <FileList files={files} onDelete={onDelete} />
+          </div>
 
-      <Trace calls={calls} />
+          <Trace calls={calls} />
+        </>
+      )}
     </main>
   );
 }
