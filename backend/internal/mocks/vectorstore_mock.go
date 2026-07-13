@@ -41,31 +41,31 @@ func (m *MockVectorStore) EXPECT() *MockVectorStoreMockRecorder {
 }
 
 // Delete mocks base method.
-func (m *MockVectorStore) Delete(ctx context.Context, id string) error {
+func (m *MockVectorStore) Delete(ctx context.Context, fileID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", ctx, id)
+	ret := m.ctrl.Call(m, "Delete", ctx, fileID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockVectorStoreMockRecorder) Delete(ctx, id any) *gomock.Call {
+func (mr *MockVectorStoreMockRecorder) Delete(ctx, fileID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockVectorStore)(nil).Delete), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockVectorStore)(nil).Delete), ctx, fileID)
 }
 
 // Put mocks base method.
-func (m *MockVectorStore) Put(ctx context.Context, id, ownerID string, vector []float32) error {
+func (m *MockVectorStore) Put(ctx context.Context, fileID, ownerID string, vectors [][]float32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Put", ctx, id, ownerID, vector)
+	ret := m.ctrl.Call(m, "Put", ctx, fileID, ownerID, vectors)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Put indicates an expected call of Put.
-func (mr *MockVectorStoreMockRecorder) Put(ctx, id, ownerID, vector any) *gomock.Call {
+func (mr *MockVectorStoreMockRecorder) Put(ctx, fileID, ownerID, vectors any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockVectorStore)(nil).Put), ctx, id, ownerID, vector)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockVectorStore)(nil).Put), ctx, fileID, ownerID, vectors)
 }
 
 // Query mocks base method.

@@ -17,6 +17,7 @@ import (
 
 	"github.com/kazemisoroush/vault/backend/internal/archive"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
+	"github.com/kazemisoroush/vault/backend/internal/chunk"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/extract"
@@ -130,7 +131,7 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 	if err != nil {
 		return fmt.Errorf("settle %q: %w", hash, err)
 	}
-	h.embed(ctx, saved)
+	h.embed(ctx, saved, extraction.Text)
 	h.cleanup(ctx, uploadID, stagingKey)
 	return nil
 }
@@ -162,16 +163,24 @@ func hashHex(content []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// embed stores the vector for a ready file so it can be found by meaning. A failure here is
-// logged, not fatal: the record is already saved and can be re-embedded later.
-func (h *Handler) embed(ctx context.Context, file domain.File) {
-	vector, err := h.embedder.Embed(ctx, file.SearchText())
-	if err != nil {
-		log.Printf("embed %s: %v", file.ID, err)
-		return
+// embed stores a file's chunk vectors so it can be found by meaning: its name, each metadata field,
+// and body passages are embedded separately, so a query matches the closest chunk rather than one
+// blurred whole-file vector. A failure here is logged, not fatal: the record is already saved and
+// can be re-embedded later, and one failed chunk drops the whole file's vectors rather than storing
+// a partial set that would rank against complete ones.
+func (h *Handler) embed(ctx context.Context, file domain.File, text string) {
+	texts := chunk.Chunks(file.Name, file.Meta, text)
+	vectors := make([][]float32, 0, len(texts))
+	for _, t := range texts {
+		vector, err := h.embedder.Embed(ctx, t)
+		if err != nil {
+			log.Printf("embed chunk of %s: %v", file.ID, err)
+			return
+		}
+		vectors = append(vectors, vector)
 	}
-	if err := h.vectors.Put(ctx, file.ID, file.OwnerID, vector); err != nil {
-		log.Printf("store vector for %s: %v", file.ID, err)
+	if err := h.vectors.Put(ctx, file.ID, file.OwnerID, vectors); err != nil {
+		log.Printf("store vectors for %s: %v", file.ID, err)
 	}
 }
 

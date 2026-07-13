@@ -32,20 +32,21 @@ func (fakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
 	return vector, nil
 }
 
-// fakeVectors is an in-memory vector store: one owner-tagged vector per file, queried by cosine.
+// fakeVectors is an in-memory vector store: a file's owner-tagged chunk vectors, queried by cosine.
+// Like the real store, a file ranks by its single closest chunk and appears at most once.
 type fakeVectors struct {
-	vectors map[string]ownedVector
+	vectors map[string]ownedChunks
 }
 
-type ownedVector struct {
-	owner  string
-	vector []float32
+type ownedChunks struct {
+	owner   string
+	vectors [][]float32
 }
 
-func newFakeVectors() *fakeVectors { return &fakeVectors{vectors: map[string]ownedVector{}} }
+func newFakeVectors() *fakeVectors { return &fakeVectors{vectors: map[string]ownedChunks{}} }
 
-func (f *fakeVectors) Put(_ context.Context, id, ownerID string, vector []float32) error {
-	f.vectors[id] = ownedVector{owner: ownerID, vector: vector}
+func (f *fakeVectors) Put(_ context.Context, fileID, ownerID string, vectors [][]float32) error {
+	f.vectors[fileID] = ownedChunks{owner: ownerID, vectors: vectors}
 	return nil
 }
 
@@ -59,7 +60,13 @@ func (f *fakeVectors) Query(_ context.Context, ownerID string, vector []float32,
 		if entry.owner != ownerID {
 			continue
 		}
-		ranked = append(ranked, scored{id: id, score: cosine(vector, entry.vector)})
+		best := math.Inf(-1)
+		for _, chunk := range entry.vectors {
+			if score := cosine(vector, chunk); score > best {
+				best = score
+			}
+		}
+		ranked = append(ranked, scored{id: id, score: best})
 	}
 	sort.Slice(ranked, func(i, j int) bool { return ranked[i].score > ranked[j].score })
 
@@ -73,8 +80,8 @@ func (f *fakeVectors) Query(_ context.Context, ownerID string, vector []float32,
 	return ids, nil
 }
 
-func (f *fakeVectors) Delete(_ context.Context, id string) error {
-	delete(f.vectors, id)
+func (f *fakeVectors) Delete(_ context.Context, fileID string) error {
+	delete(f.vectors, fileID)
 	return nil
 }
 

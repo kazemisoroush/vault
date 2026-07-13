@@ -113,7 +113,7 @@ func seed(idx *fakeIndex, vectors *fakeVectors, embedder fakeEmbedder, c Case) e
 		if err != nil {
 			return fmt.Errorf("embed case file %q: %w", cf.ID, err)
 		}
-		if err := vectors.Put(ctx, file.ID, c.Owner, vector); err != nil {
+		if err := vectors.Put(ctx, file.ID, c.Owner, [][]float32{vector}); err != nil {
 			return fmt.Errorf("store vector for case file %q: %w", cf.ID, err)
 		}
 	}

@@ -64,8 +64,12 @@ func TestSettleMovesToContentKeyAndExtracts(t *testing.T) {
 		saved = f
 		return nil
 	})
-	embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return([]float32{0.1}, nil)
-	store.EXPECT().Put(gomock.Any(), hash, "alice", []float32{0.1}).Return(nil)
+	embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return([]float32{0.1}, nil).AnyTimes()
+	store.EXPECT().Put(gomock.Any(), hash, "alice", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, vectors [][]float32) error {
+			assert.NotEmpty(t, vectors)
+			return nil
+		})
 	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
