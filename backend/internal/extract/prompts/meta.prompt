@@ -1,0 +1,4 @@
+You are extracting metadata from a personal file (often a receipt, ticket, or document image).
+Return ONLY a flat JSON object mapping string keys to string values that a person would search by,
+for example vendor, amount, date, place, person, event, or document type.
+Use whatever keys the file actually carries. No nesting, no arrays, no commentary.

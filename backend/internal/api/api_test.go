@@ -25,9 +25,11 @@ func TestNewFailsClosedWhenAuthNotConfigured(t *testing.T) {
 	answerer := agentmock.NewMockAnswerer(ctrl)
 	vectorStore := mocks.NewMockVectorStore(ctrl)
 	callLister := mocks.NewMockCallLister(ctrl)
+	checkStore := mocks.NewMockCheckStore(ctrl)
+	enqueuer := mocks.NewMockEnqueuer(ctrl)
 
 	// Act
-	_, err := api.NewHandler(context.Background(), config.Config{}, idx, blobs, vectorStore, answerer, callLister, telemetry.NoopEmitter{})
+	_, err := api.NewHandler(context.Background(), config.Config{}, idx, blobs, vectorStore, answerer, checkStore, enqueuer, callLister, telemetry.NoopEmitter{})
 
 	// Assert
 	assert.Error(t, err)
@@ -44,7 +46,7 @@ func TestNewAuthDisabledServesDataRoute(t *testing.T) {
 	idx.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", nil)
 
 	// Act
-	handler, err := api.NewHandler(context.Background(), config.Config{AuthDisabled: true}, idx, blobs, vectorStore, answerer, callLister, telemetry.NoopEmitter{})
+	handler, err := api.NewHandler(context.Background(), config.Config{AuthDisabled: true}, idx, blobs, vectorStore, answerer, mocks.NewMockCheckStore(ctrl), mocks.NewMockEnqueuer(ctrl), callLister, telemetry.NoopEmitter{})
 	require.NoError(t, err)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/files", nil))

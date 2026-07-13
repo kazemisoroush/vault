@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	lambdasvc "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/api"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/calls"
+	"github.com/kazemisoroush/vault/backend/internal/checks"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/extract"
@@ -52,7 +54,14 @@ func main() {
 
 	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), embedder, vectorStore, idx)
 
-	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, recorder, telemetry.NewEMFEmitter(os.Stdout))
+	// The check pipeline runs as an async self-invocation, so the API reply is immediate and the
+	// pipeline gets the full function timeout. AWS_LAMBDA_FUNCTION_NAME is set by the runtime.
+	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
+	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
+	runner := checks.NewRunner(checkStore, idx, blobs, embedder, vectorStore, checkModel)
+	enqueuer := checks.NewLambdaEnqueuer(lambdasvc.NewFromConfig(awsCfg), cfg.FunctionName)
+
+	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}
@@ -64,6 +73,6 @@ func main() {
 	}
 	ingester := ingest.NewHandler(idx, blobs, extractor, embedder, vectorStore)
 
-	adapter := transport.NewTransport(proxy, ingester)
+	adapter := transport.NewTransport(proxy, ingester, runner)
 	lambda.Start(adapter.Handle)
 }

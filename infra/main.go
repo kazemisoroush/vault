@@ -93,6 +93,14 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		RemovalPolicy:       awscdk.RemovalPolicy_DESTROY,
 	})
 
+	// checksTable holds check runs: pasted text, claims, and verdicts.
+	checksTable := awsdynamodb.NewTableV2(stack, jsii.String("Checks"), &awsdynamodb.TablePropsV2{
+		PartitionKey: &awsdynamodb.Attribute{
+			Name: jsii.String("id"),
+			Type: awsdynamodb.AttributeType_STRING,
+		},
+	})
+
 	// The S3 Vectors bucket and index hold one embedding per file, keyed by file id, for semantic
 	// search. CloudFormation supports these natively, so they are plain L1 resources.
 	vectorBucket := awscdk.NewCfnResource(stack, jsii.String("VectorBucket"), &awscdk.CfnResourceProps{
@@ -154,6 +162,7 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 			"VAULT_VECTOR_BUCKET":  jsii.String(vectorBucketName),
 			"VAULT_VECTOR_INDEX":   jsii.String(vectorIndexName),
 			"VAULT_CALLS_TABLE":    callsTable.TableName(),
+			"VAULT_CHECKS_TABLE":   checksTable.TableName(),
 		},
 	})
 
@@ -161,6 +170,15 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 	bucket.GrantDelete(fn, nil)
 	table.GrantReadWriteData(fn)
 	callsTable.GrantReadWriteData(fn)
+	checksTable.GrantReadWriteData(fn)
+
+	// The check pipeline runs as an async self-invocation (the API reply returns immediately and
+	// the pipeline gets the full timeout). The function's own name is unknowable here without a
+	// circular reference, so the grant is scoped by the stack's function name prefix.
+	fn.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions:   jsii.Strings("lambda:InvokeFunction"),
+		Resources: jsii.Strings("arn:aws:lambda:" + *stack.Region() + ":" + *stack.Account() + ":function:" + *stack.StackName() + "-Api*"),
+	}))
 
 	fn.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions: jsii.Strings("bedrock:InvokeModel"),

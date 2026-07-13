@@ -31,3 +31,29 @@ func parseMeta(reply string) (map[string]string, error) {
 	}
 	return meta, nil
 }
+
+// transcriptionFromReply parses a transcribing reply's {"meta": ..., "text": ...} object. It
+// reports ok=false when the reply carries no decodable JSON, which typically means the
+// transcription was truncated at the token cap, so the caller can fall back to a metadata-only
+// extraction instead of silently landing the file with nothing.
+func transcriptionFromReply(reply string) (map[string]string, string, bool) {
+	start := strings.Index(reply, "{")
+	end := strings.LastIndex(reply, "}")
+	if start < 0 || end < 0 || end < start {
+		log.Printf("transcription produced no JSON (truncated or declined), falling back to metadata only")
+		return nil, "", false
+	}
+
+	var parsed struct {
+		Meta map[string]string `json:"meta"`
+		Text string            `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(reply[start:end+1]), &parsed); err != nil {
+		log.Printf("transcription reply did not decode (%v), falling back to metadata only", err)
+		return nil, "", false
+	}
+	if parsed.Meta == nil {
+		parsed.Meta = map[string]string{}
+	}
+	return parsed.Meta, parsed.Text, true
+}

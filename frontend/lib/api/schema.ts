@@ -60,6 +60,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify pasted text against the owner's stored documents.
+         * @description Splits the text into atomic claims, matches each claim to a supporting span in the owner's files, and verifies every verbatim span in code, character for character, against the file's stored text. The pipeline runs asynchronously; poll the check by id.
+         */
+        post: operations["createCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/checks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one check with its claims and verdicts. */
+        get: operations["getCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/calls": {
         parameters: {
             query?: never;
@@ -195,6 +232,48 @@ export interface components {
         };
         CallsResponse: {
             calls: components["schemas"]["LlmCall"][];
+        };
+        CreateCheckRequest: {
+            /** @description The text to verify, roughly a pasted page or two. */
+            text: string;
+        };
+        /** @description One passage in one of the owner's files that bears on a claim. Every reference passed the existence gate: code re-read the stored text at the offsets and matched spanText character for character before it was persisted. */
+        Reference: {
+            fileId: string;
+            fileName: string;
+            /** @description The passage, exactly as it appears in the file's stored text. */
+            spanText: string;
+            /** @description UTF-8 byte offset of the span in the file's stored text, located by code. Byte, not character: a JavaScript client must slice encoded bytes (TextEncoder), or locate spanText directly, rather than indexing the string by these numbers. */
+            start: number;
+            end: number;
+            /**
+             * @description How the passage bears on the claim, as judged by the model. Verbatim additionally survived a code-level claim-span comparison; a missing contradicts reference never certifies that no contradiction exists.
+             * @enum {string}
+             */
+            relation: "verbatim" | "paraphrase" | "contradicts";
+        };
+        Claim: {
+            text: string;
+            /** @description UTF-8 byte offset of the claim in the check's own text. Byte, not character; see Reference.start for how a JavaScript client should use it. */
+            start: number;
+            end: number;
+            /**
+             * @description Verified means a reference restates the claim and code confirmed it character for character. Disputed outranks verified: the record holds contradicting evidence, and both sides are in references. Review means reworded support awaits a human. Unsupported means no supporting span was confirmed, whether the search came back empty or the model's proposals were discarded by the gate; silence, not falsehood.
+             * @enum {string}
+             */
+            verdict: "verified" | "disputed" | "review" | "unsupported";
+            references?: components["schemas"]["Reference"][];
+        };
+        Check: {
+            id: string;
+            text: string;
+            /** @enum {string} */
+            status: "pending" | "running" | "done" | "failed";
+            claims?: components["schemas"]["Claim"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
         };
         Error: {
             error: string;
@@ -371,6 +450,54 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+        };
+    };
+    createCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Check accepted and queued. Poll GET /checks/{id} for verdicts. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Check"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    getCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The check, with claims once the pipeline has run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Check"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listCalls: {

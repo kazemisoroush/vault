@@ -33,7 +33,7 @@ func TestHandleRoutesS3ToIngester(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{}, nil
 	}
-	adapter := transport.NewTransport(proxy, ingester)
+	adapter := transport.NewTransport(proxy, ingester, stubRunner{})
 
 	// Act
 	_, err := adapter.Handle(context.Background(), json.RawMessage(s3Payload))
@@ -53,7 +53,7 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 	}
-	adapter := transport.NewTransport(proxy, ingester)
+	adapter := transport.NewTransport(proxy, ingester, stubRunner{})
 
 	// Act
 	resp, err := adapter.Handle(context.Background(), json.RawMessage(apiPayload))
@@ -62,4 +62,16 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, proxyCalled, "API event must hit the HTTP proxy")
 	assert.Equal(t, 200, resp.(events.APIGatewayV2HTTPResponse).StatusCode)
+}
+
+// stubRunner satisfies transport.CheckRunner for tests that never route a check task.
+type stubRunner struct {
+	run func(ctx context.Context, checkID string, ownerID string) error
+}
+
+func (s stubRunner) Run(ctx context.Context, checkID string, ownerID string) error {
+	if s.run == nil {
+		return nil
+	}
+	return s.run(ctx, checkID, ownerID)
 }

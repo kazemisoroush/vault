@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.50
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.54.2
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.59.2
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.97.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.2
 	github.com/aws/aws-sdk-go-v2/service/s3vectors v1.8.2
 	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2

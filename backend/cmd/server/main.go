@@ -15,6 +15,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/api"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/calls"
+	"github.com/kazemisoroush/vault/backend/internal/checks"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
 	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
@@ -48,7 +49,13 @@ func main() {
 
 	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), embedder, vectorStore, idx)
 
-	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, recorder, telemetry.NewEMFEmitter(os.Stdout))
+	// Locally there is no Lambda to self-invoke, so the check pipeline runs in a goroutine.
+	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
+	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
+	runner := checks.NewRunner(checkStore, idx, blobs, embedder, vectorStore, checkModel)
+	enqueuer := checks.NewLocalEnqueuer(runner)
+
+	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}
