@@ -2,22 +2,21 @@
 
 import type { Claim } from "../lib/checks/check";
 
-// verdictLine says, in one honest sentence, what the claim's verdict may promise.
+// verdictLine says what the claim's verdict may honestly promise.
 function verdictLine(verdict: Claim["verdict"]): string {
   switch (verdict) {
     case "verified":
-      return "verified — code-proven quote";
+      return "verified: code-proven quote";
     case "disputed":
-      return "disputed — the record disagrees; you decide";
+      return "disputed: the record disagrees; you decide";
     case "review":
-      return "review — confirm the passage supports your wording";
+      return "review: confirm the passage supports your wording";
     default:
-      return "unsupported — your documents are silent on this";
+      return "unsupported: no passage was found for this sentence";
   }
 }
 
-// References shows every gate-verified passage bearing on one claim: the relation, the file,
-// and the exact span. Every span shown here was confirmed by code to exist in the stored text.
+// References shows every gate-verified passage bearing on one claim.
 export function References({ claim, onBack }: { claim: Claim; onBack: () => void }) {
   const references = claim.references ?? [];
   return (
@@ -29,8 +28,8 @@ export function References({ claim, onBack }: { claim: Claim; onBack: () => void
       <blockquote className="refs-claim">{claim.text}</blockquote>
       {references.length === 0 ? (
         <p className="empty">
-          No passage in the record bears on this sentence, supporting or contradicting. Silence is
-          not falsehood; it is where you look hardest.
+          The search found no passage for this sentence. That certifies nothing either way;
+          silence is where to look hardest.
         </p>
       ) : (
         <ul className="refs-list">

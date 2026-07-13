@@ -15,8 +15,7 @@ export const metadata: Metadata = {
   description: "Your personal data vault",
 };
 
-// themeScript sets the theme and mode before paint so there is no flash of the wrong palette.
-// The only interpolation is the two build-time constant keys, so it stays safe to inline.
+// themeScript sets the theme and mode before paint, interpolating only build-time constants.
 const themeScript = `(function(){try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;var m=localStorage.getItem('${MODE_STORAGE_KEY}');if(m==='legal'){document.documentElement.dataset.mode=m;}}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

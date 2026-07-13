@@ -18,8 +18,8 @@ describe("References", () => {
     render(<References claim={claim} onBack={() => undefined} />);
 
     // Assert
-    expect(screen.getByText(/unsupported — your documents are silent/)).toBeInTheDocument();
-    expect(screen.getByText(/Silence is not falsehood/)).toBeInTheDocument();
+    expect(screen.getByText(/unsupported: no passage was found/)).toBeInTheDocument();
+    expect(screen.getByText(/silence is where to look hardest/)).toBeInTheDocument();
   });
 
   it("goes back to the record on the back button", () => {

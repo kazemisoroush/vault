@@ -2,9 +2,7 @@
 
 import { MODE_STORAGE_KEY, type Mode } from "../lib/mode";
 
-// ModeToggle flips the app between its two faces: the personal vault and the Cited legal view.
-// The mode is stamped on the document element (the palette swap lives in CSS) and persisted;
-// the page owns the state so the rest of the view can follow it.
+// ModeToggle flips the app between the personal vault and the Cited legal view.
 export function ModeToggle({ mode, onMode }: { mode: Mode; onMode: (mode: Mode) => void }) {
   function set(next: Mode) {
     if (next === mode) return;

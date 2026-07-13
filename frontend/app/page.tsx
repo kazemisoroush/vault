@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AskBox } from "../components/AskBox";
@@ -37,8 +37,8 @@ export default function Home() {
   const [calls, setCalls] = useState<LlmCall[]>([]);
   const [mode, setMode] = useState<Mode>("personal");
 
-  // The pre-paint script in the layout stamps the persisted mode; the state follows it here.
-  useEffect(() => {
+  // The pre-paint script stamps the persisted mode; reading it before paint avoids a flash.
+  useLayoutEffect(() => {
     if (document.documentElement.dataset.mode === "legal") {
       setMode("legal");
     }

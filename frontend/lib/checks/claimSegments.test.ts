@@ -64,6 +64,20 @@ describe("claimSegments", () => {
     expect(segments.every((s) => s.claimIndex === undefined)).toBe(true);
   });
 
+
+  it("skips a claim whose offset cuts a character in half", () => {
+    // Arrange: start lands on the second byte of the multibyte curly quote.
+    const text = "“quoted” text.";
+    const broken: Claim = { text: "?", start: 1, end: 5, verdict: "unsupported" };
+
+    // Act
+    const segments = claimSegments(text, [broken]);
+
+    // Assert: no mangled U+FFFD run; the text renders whole and unhighlighted.
+    expect(segments.map((s) => s.text).join("")).toBe(text);
+    expect(segments.every((s) => s.claimIndex === undefined)).toBe(true);
+  });
+
   it("renders out-of-order claims in text order", () => {
     // Arrange
     const text = "First point. Second point.";

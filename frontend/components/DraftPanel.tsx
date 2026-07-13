@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import type { Check } from "../lib/checks/check";
 import { claimSegments } from "../lib/checks/claimSegments";
 
-// verdictCounts tallies the rail above a finished check: how many of each color.
+// verdictCounts tallies how many claims landed on each verdict.
 function verdictCounts(check: Check): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const claim of check.claims ?? []) {
@@ -14,21 +14,21 @@ function verdictCounts(check: Check): Record<string, number> {
   return counts;
 }
 
-// DraftPanel is the right side of the Cited view: paste text, run the check, and read the
-// verdicts as highlights. Clicking a highlighted sentence selects it, and the record panel
-// shows its references.
+// DraftPanel is the paste-and-check side of the Cited view.
 export function DraftPanel({
   check,
   submitting,
   selected,
   onCheck,
   onSelect,
+  onReset,
 }: {
   check: Check | null;
   submitting: boolean;
   selected: number | null;
   onCheck: (text: string) => void;
   onSelect: (index: number) => void;
+  onReset: () => void;
 }) {
   const [text, setText] = useState("");
 
@@ -64,7 +64,12 @@ export function DraftPanel({
       )}
 
       {check !== null && check.status === "failed" && (
-        <p role="alert">This check failed to finish. Try a shorter text, or try again.</p>
+        <>
+          <p role="alert">This check failed to finish. Try a shorter text, or try again.</p>
+          <button className="btn" type="button" onClick={onReset}>
+            Check another
+          </button>
+        </>
       )}
 
       {check !== null && check.status === "done" && (
@@ -94,13 +99,16 @@ export function DraftPanel({
             <span className="review">review</span>
             <span className="unsupported">unsupported</span>
           </p>
+          <button className="btn another" type="button" onClick={onReset}>
+            Check another
+          </button>
         </>
       )}
     </section>
   );
 }
 
-// VerdictRail is the one-line tally above a finished check.
+// VerdictRail is the tally line above a finished check.
 function VerdictRail({ check }: { check: Check }) {
   const counts = verdictCounts(check);
   const order = ["verified", "disputed", "review", "unsupported"];

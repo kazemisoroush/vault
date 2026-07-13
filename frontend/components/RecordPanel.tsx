@@ -4,9 +4,7 @@ import type { Claim } from "../lib/checks/check";
 import type { VaultFile } from "../lib/files/vaultFile";
 import { References } from "./References";
 
-// RecordPanel is the left side of the Cited view. At rest it lists the record: every document
-// the checks run against. With a claim selected it shows that claim's references instead, the
-// same place a pinpoint click will land in later milestones.
+// RecordPanel lists the record, or the selected claim's references.
 export function RecordPanel({
   files,
   claim,

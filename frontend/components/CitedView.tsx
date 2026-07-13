@@ -12,10 +12,7 @@ import { RecordPanel } from "./RecordPanel";
 
 const defaultPollMs = 3000;
 
-// CitedView is the legal face: the record (your files) on the left, the draft being checked on
-// the right. It owns the check lifecycle: submit, poll while the pipeline runs, and hold the
-// selected claim whose references the left panel shows. pollMs is overridable so tests can
-// poll fast with real timers.
+// CitedView is the legal face: the record on the left, the draft being checked on the right.
 export function CitedView({
   api,
   files,
@@ -30,6 +27,13 @@ export function CitedView({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const checkID = useRef<string | null>(null);
+
+  const onReset = useCallback(() => {
+    checkID.current = null;
+    setCheck(null);
+    setSelected(null);
+    setError(null);
+  }, []);
 
   const onCheck = useCallback(
     async (text: string) => {
@@ -56,7 +60,16 @@ export function CitedView({
       const id = checkID.current;
       if (!id) return;
       getCheck(api, id)
-        .then(setCheck)
+        .then((fetched) => {
+          setError(null);
+          setCheck((previous) => {
+            // A stale or out-of-order response must never revert a landed check.
+            if (previous && (previous.status === "done" || previous.status === "failed")) {
+              return previous;
+            }
+            return fetched.id === checkID.current ? fetched : previous;
+          });
+        })
         .catch((err: unknown) => {
           setError(err instanceof Error ? err.message : "could not read the check");
         });
@@ -75,6 +88,7 @@ export function CitedView({
         selected={selected}
         onCheck={onCheck}
         onSelect={setSelected}
+        onReset={onReset}
       />
       {error && (
         <p role="alert" className="cited-error">
