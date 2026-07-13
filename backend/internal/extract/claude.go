@@ -153,7 +153,7 @@ func wrapExtractError(err error) error {
 func fileBlock(content []byte, contentType string) llm.Part {
 	switch {
 	case strings.HasPrefix(contentType, "image/"):
-		return llm.Image(contentType, content)
+		return imageBlock(content, contentType)
 	case contentType == "application/pdf":
 		return llm.Document(content)
 	case isOffice(contentType):
