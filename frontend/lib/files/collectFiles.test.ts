@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { collectFiles, filterFiles, type FsEntry } from "./collectFiles";
+import { collectFiles, filterFiles, type FileSystemEntryLike } from "./collectFiles";
 
 // fileEntry builds a fake file entry yielding a File with the given content (empty means zero-byte).
-function fileEntry(name: string, content = "x"): FsEntry {
+function fileEntry(name: string, content = "x"): FileSystemEntryLike {
   return {
     isFile: true,
     isDirectory: false,
@@ -14,7 +14,7 @@ function fileEntry(name: string, content = "x"): FsEntry {
 
 // dirEntry builds a fake directory whose reader serves children in the given batches, then empties,
 // mirroring the real entries API which returns at most a batch per readEntries call.
-function dirEntry(name: string, batches: FsEntry[][]): FsEntry {
+function dirEntry(name: string, batches: FileSystemEntryLike[][]): FileSystemEntryLike {
   let call = 0;
   return {
     isFile: false,
@@ -29,7 +29,7 @@ function dirEntry(name: string, batches: FsEntry[][]): FsEntry {
 describe("collectFiles", () => {
   it("walks nested directories into a flat list, skipping junk, empties, and system dirs", async () => {
     // Arrange
-    const tree: FsEntry[] = [
+    const tree: FileSystemEntryLike[] = [
       dirEntry("album", [
         [
           fileEntry("photo.jpg"),
@@ -50,13 +50,13 @@ describe("collectFiles", () => {
 
   it("skips a single unreadable entry rather than losing the whole drop", async () => {
     // Arrange: one file entry errors when its File is read.
-    const broken: FsEntry = {
+    const broken: FileSystemEntryLike = {
       isFile: true,
       isDirectory: false,
       name: "broken",
       file: (_ok, err) => err?.(new Error("read failed")),
     };
-    const tree: FsEntry[] = [dirEntry("album", [[fileEntry("photo.jpg"), broken, fileEntry("note.txt")]])];
+    const tree: FileSystemEntryLike[] = [dirEntry("album", [[fileEntry("photo.jpg"), broken, fileEntry("note.txt")]])];
 
     // Act
     const files = await collectFiles(tree);
@@ -67,7 +67,7 @@ describe("collectFiles", () => {
 
   it("drains a directory that returns its children across several batches", async () => {
     // Arrange: the reader serves two batches before it empties.
-    const tree: FsEntry[] = [dirEntry("big", [[fileEntry("a"), fileEntry("b")], [fileEntry("c")]])];
+    const tree: FileSystemEntryLike[] = [dirEntry("big", [[fileEntry("a"), fileEntry("b")], [fileEntry("c")]])];
 
     // Act
     const files = await collectFiles(tree);

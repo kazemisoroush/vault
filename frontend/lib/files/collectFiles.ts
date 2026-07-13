@@ -2,18 +2,18 @@
 // a dropped folder ingests exactly like its files dropped one by one. The browser's FileSystem
 // entries API is abstracted behind small interfaces, so the walk is testable without a DOM.
 
-// DirEntryReader reads a directory's children, at most a batch per call, until it returns none.
-export interface DirEntryReader {
-  readEntries(onOk: (entries: FsEntry[]) => void, onErr?: (error: unknown) => void): void;
+// DirectoryEntryReader reads a directory's children, at most a batch per call, until it returns none.
+export interface DirectoryEntryReader {
+  readEntries(onOk: (entries: FileSystemEntryLike[]) => void, onErr?: (error: unknown) => void): void;
 }
 
-// FsEntry is the slice of FileSystemEntry we use: a file yields its File, a directory yields a reader.
-export interface FsEntry {
+// FileSystemEntryLike is the slice of FileSystemEntry we use: a file yields its File, a directory yields a reader.
+export interface FileSystemEntryLike {
   isFile: boolean;
   isDirectory: boolean;
   name: string;
   file?(onOk: (file: File) => void, onErr?: (error: unknown) => void): void;
-  createReader?(): DirEntryReader;
+  createReader?(): DirectoryEntryReader;
 }
 
 // isSystemDir names hold no user files, so we skip them without descending.
@@ -29,7 +29,7 @@ export function keepFile(file: File): boolean {
 }
 
 // entryFile promisifies a file entry's File.
-function entryFile(entry: FsEntry): Promise<File> {
+function entryFile(entry: FileSystemEntryLike): Promise<File> {
   return new Promise((resolve, reject) => {
     if (!entry.file) {
       reject(new Error(`entry ${entry.name} is not a file`));
@@ -40,10 +40,10 @@ function entryFile(entry: FsEntry): Promise<File> {
 }
 
 // readAll drains a directory reader, which returns at most a batch per call, until it is empty.
-async function readAll(reader: DirEntryReader): Promise<FsEntry[]> {
-  const all: FsEntry[] = [];
+async function readAll(reader: DirectoryEntryReader): Promise<FileSystemEntryLike[]> {
+  const all: FileSystemEntryLike[] = [];
   for (;;) {
-    const batch = await new Promise<FsEntry[]>((resolve, reject) => reader.readEntries(resolve, reject));
+    const batch = await new Promise<FileSystemEntryLike[]>((resolve, reject) => reader.readEntries(resolve, reject));
     if (batch.length === 0) break;
     all.push(...batch);
   }
@@ -53,7 +53,7 @@ async function readAll(reader: DirEntryReader): Promise<FsEntry[]> {
 // dropEntries adapts a drop event's items into filesystem entries. It must be called synchronously
 // inside the drop handler, because the items expire once the event returns. It sits here, next to
 // the walk, so the whole filesystem boundary lives in one place.
-export function dropEntries(items: DataTransferItemList | null): FsEntry[] {
+export function dropEntries(items: DataTransferItemList | null): FileSystemEntryLike[] {
   if (!items) return [];
   return Array.from(items)
     .map((item) => (typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null))
@@ -63,7 +63,7 @@ export function dropEntries(items: DataTransferItemList | null): FsEntry[] {
 // collectFiles walks the entries depth-first into a flat, filtered list of files. A single entry
 // that cannot be read is skipped rather than failing the whole walk, so one bad file does not lose
 // the entire dropped folder.
-export async function collectFiles(entries: FsEntry[]): Promise<File[]> {
+export async function collectFiles(entries: FileSystemEntryLike[]): Promise<File[]> {
   const files: File[] = [];
   for (const entry of entries) {
     try {
