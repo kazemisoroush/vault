@@ -51,8 +51,8 @@ func TestShrinkImageDownsizesAnOversizedImage(t *testing.T) {
 	decoded, _, err := image.Decode(bytes.NewReader(out))
 	require.NoError(t, err)
 	bounds := decoded.Bounds()
-	assert.LessOrEqual(t, bounds.Dx(), maxImageEdge)
-	assert.LessOrEqual(t, bounds.Dy(), maxImageEdge)
+	assert.LessOrEqual(t, bounds.Dx(), maxImageEdgePixels)
+	assert.LessOrEqual(t, bounds.Dy(), maxImageEdgePixels)
 }
 
 func TestShrinkImageIgnoresUndecodableBytes(t *testing.T) {
@@ -72,10 +72,10 @@ func TestScaledBoundsKeepsEachEdgeAtLeastOnePixel(t *testing.T) {
 	wide := image.Rect(0, 0, 4000, 1)
 
 	// Act
-	got := scaledBounds(wide, maxImageEdge)
+	got := scaledBounds(wide, maxImageEdgePixels)
 
 	// Assert: longest edge capped, and no zero-size edge that would make a blank image.
-	assert.LessOrEqual(t, got.Dx(), maxImageEdge)
+	assert.LessOrEqual(t, got.Dx(), maxImageEdgePixels)
 	assert.GreaterOrEqual(t, got.Dx(), 1)
 	assert.GreaterOrEqual(t, got.Dy(), 1)
 }

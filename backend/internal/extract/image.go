@@ -12,11 +12,11 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
-// maxImageEdge is the longest side the model keeps before it downscales anyway, so a larger image is
+// maxImageEdgePixels is the longest side the model keeps before it downscales anyway, so a larger image is
 // scaled to fit. maxImagePixels caps how big an image we will decode, so a compression bomb (a tiny
 // file that decodes to a huge bitmap) cannot exhaust the function's memory.
 const (
-	maxImageEdge   = 1568
+	maxImageEdgePixels   = 1568
 	maxImagePixels = 100_000_000
 )
 
@@ -46,7 +46,7 @@ func shrinkImage(content []byte) ([]byte, bool) {
 		return nil, false
 	}
 
-	bounds := scaledBounds(source.Bounds(), maxImageEdge)
+	bounds := scaledBounds(source.Bounds(), maxImageEdgePixels)
 	scaled := image.NewRGBA(bounds)
 	// JPEG has no alpha, so flatten any transparency onto white rather than the zero value (black).
 	xdraw.Draw(scaled, bounds, image.White, image.Point{}, xdraw.Src)
@@ -81,7 +81,7 @@ func atLeastOne(n int) int {
 
 // encodeUnderLimit encodes the image as JPEG, dropping the quality until the result fits the byte
 // budget so the base64 payload stays under the limit. It returns ok=false only if nothing could be
-// encoded, which does not happen for a decoded image capped to maxImageEdge.
+// encoded, which does not happen for a decoded image capped to maxImageEdgePixels.
 func encodeUnderLimit(img image.Image) ([]byte, bool) {
 	var best []byte
 	for quality := 85; quality >= 40; quality -= 15 {
