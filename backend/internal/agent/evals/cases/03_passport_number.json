@@ -1,0 +1,14 @@
+{
+  "name": "passport_number_exact_value",
+  "query": "what is my Australian passport number?",
+  "owner": "alice",
+  "files": [
+    {"id": "img4326", "name": "IMG_4326.JPG", "meta": {"document_type": "Passport", "passport_number": "RA3495037", "given_names": "SOROUSH", "family_name": "KAZEMI", "nationality": "AUSTRALIAN"}},
+    {"id": "license", "name": "Driving License Front.jpg", "meta": {"document_type": "Driving License", "license_number": "1234567", "family_name": "KAZEMI"}}
+  ],
+  "script": {
+    "calls": [{"name": "find_by_facts", "input": {"contains": [{"field": "document_type", "value": "Passport"}]}}],
+    "final": "{\"answer\":\"Your Australian passport number is RA3495037.\",\"fileIds\":[\"img4326\"]}"
+  },
+  "expect": {"fileIds": ["img4326"], "answerContains": ["RA3495037"]}
+}

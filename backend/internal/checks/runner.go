@@ -14,8 +14,12 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
-// candidateLimit is how many of the owner's files the judge sees per claim.
-const candidateLimit = int32(3)
+// candidateLimit is how many of the owner's nearest-by-meaning files the judge sees per claim.
+// Chunk-level embeddings rank the right document higher and a literal source now rescues exact
+// values, so this window can sit a little wider than the original 3 for better recall without
+// leaning on either alone. The gate still verifies every span, so a wider window cannot green a
+// claim the evidence does not support.
+const candidateLimit = int32(6)
 
 // maxClaims bounds how many sentences one check may spend model calls on. The API's character
 // limit admits pathological inputs of thousands of tiny sentences; past this cap the check is
