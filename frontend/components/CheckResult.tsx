@@ -19,8 +19,7 @@ function verdictLine(verdict: Claim["verdict"]): string {
   }
 }
 
-// CheckResult renders a finished check where an ask reply would render: highlighted sentences,
-// references unfolding inline under the clicked sentence, and the verdict tally.
+// CheckResult renders a finished check: highlights, inline references, and the tally.
 export function CheckResult({ check, onReset }: { check: Check; onReset: () => void }) {
   const [open, setOpen] = useState<number | null>(null);
   const claims = check.claims ?? [];
