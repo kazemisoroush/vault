@@ -1,96 +1,113 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsbedrock"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsopensearchserverless"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsopensearchservice"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/aws-cdk-go/awscdk/v2/customresources"
 	"github.com/aws/jsii-runtime-go"
 )
 
 const (
-	// kbName is the shared prefix for the Knowledge Base's OpenSearch resources. The collection name
-	// must match the AOSS pattern (lowercase, starts with a letter, 3-32 chars); the rest derive from
-	// it so the prefix lives in one place.
-	kbName            = "vault-kb"
-	kbCollectionName  = kbName
-	kbCollectionGroup = kbName + "-group"
-	kbVectorIndexName = kbName + "-index"
+	// kbDomainName names the OpenSearch managed domain (lowercase, 3-28 chars, starts with a letter).
+	kbDomainName      = "vault-kb"
+	kbVectorIndexName = "vault-kb-index"
 
-	kbEncryptionPolicyName = kbName + "-enc"
-	kbNetworkPolicyName    = kbName + "-net"
-	kbAccessPolicyName     = kbName + "-access"
-
-	// Bedrock's default field names for a Knowledge Base vector index. The index mapping and the
-	// Knowledge Base field mapping must name the same three fields.
+	// Bedrock's default field names for a Knowledge Base vector index. The index the Lambda creates
+	// and the Knowledge Base field mapping must name the same three fields.
 	kbVectorField   = "bedrock-knowledge-base-default-vector"
 	kbTextField     = "AMAZON_BEDROCK_TEXT"
 	kbMetadataField = "AMAZON_BEDROCK_METADATA"
-
-	// cdkQualifier is the CDK bootstrap qualifier this repo deploys with, so the CloudFormation
-	// execution role that creates the vector index can be granted data-plane access below. The repo
-	// uses the default qualifier (see cicd_test.go, which asserts cdk-hnb659fds-* roles).
-	cdkQualifier = "hnb659fds"
 )
 
-// newKnowledgeBase stands up the managed retrieval foundation: an OpenSearch Serverless NextGen
-// (scale-to-zero, no OCU floor) collection and its vector index, plus a Bedrock Knowledge Base over
-// the files bucket that parses PDFs and image scans with Bedrock Data Automation so they become
-// searchable. It provisions storage and ingestion only; querying the Knowledge Base, where hybrid
-// vector plus BM25 search is applied, is a later change. It returns the Knowledge Base so the stack
-// can output its id.
+// indexInitCode is the inline handler for the custom resource that creates the vector index. A
+// managed OpenSearch domain has no native CloudFormation index resource, so on create it signs a
+// PUT to the domain with the k-NN mapping (FAISS/HNSW, the engine Bedrock requires), and on delete
+// it removes the index. The Provider framework wraps the CloudFormation response protocol.
+const indexInitCode = `
+import json, urllib3, botocore.session
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+
+http = urllib3.PoolManager()
+
+def _signed(method, url, body, region):
+    creds = botocore.session.Session().get_credentials().get_frozen_credentials()
+    req = AWSRequest(method=method, url=url, data=body, headers={"Content-Type": "application/json"})
+    SigV4Auth(creds, "es", region).add_auth(req)
+    return http.request(method, url, body=body, headers=dict(req.headers))
+
+def handler(event, context):
+    p = event["ResourceProperties"]
+    url = p["Endpoint"].rstrip("/") + "/" + p["IndexName"]
+    pid = "index-" + p["IndexName"]
+    if event["RequestType"] == "Delete":
+        _signed("DELETE", url, None, p["Region"])
+        return {"PhysicalResourceId": pid}
+    mapping = {
+        "settings": {"index": {"knn": True}},
+        "mappings": {"properties": {
+            p["VectorField"]: {"type": "knn_vector", "dimension": int(p["Dimension"]),
+                "method": {"name": "hnsw", "engine": "faiss", "space_type": "l2"}},
+            p["TextField"]: {"type": "text"},
+            p["MetadataField"]: {"type": "text", "index": False},
+        }},
+    }
+    r = _signed("PUT", url, json.dumps(mapping), p["Region"])
+    if r.status not in (200, 201) and b"resource_already_exists_exception" not in r.data:
+        raise Exception("create index failed: %d %s" % (r.status, r.data[:500]))
+    return {"PhysicalResourceId": pid}
+`
+
+// newKnowledgeBase stands up the managed retrieval foundation: an OpenSearch managed domain, its
+// vector index (created by a custom-resource Lambda, since a managed domain has no native
+// CloudFormation index resource), and a Bedrock Knowledge Base over the files bucket that parses
+// PDFs and image scans with Bedrock Data Automation. It provisions storage and ingestion only;
+// querying the Knowledge Base, where hybrid vector plus BM25 search is applied, is a later change.
 func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKnowledgeBase {
 	region := stack.Region()
 	account := stack.Account()
 
-	// AOSS needs an encryption policy and a network policy in place before the collection exists.
-	encryption := awsopensearchserverless.NewCfnSecurityPolicy(stack, jsii.String("KbEncryptionPolicy"), &awsopensearchserverless.CfnSecurityPolicyProps{
-		Name: jsii.String(kbEncryptionPolicyName),
-		Type: jsii.String("encryption"),
-		Policy: jsii.String(mustJSON(map[string]any{
-			"Rules": []map[string]any{{
-				"ResourceType": "collection",
-				"Resource":     []string{"collection/" + kbCollectionName},
-			}},
-			"AWSOwnedKey": true,
-		})),
+	// Managed OpenSearch domain: one small node, encrypted at rest and in transit, HTTPS only. The
+	// access policy allows this account's principals (identity policies below scope who actually
+	// reaches it); fine-grained access control is optional and not used.
+	domainArn := fmt.Sprintf("arn:aws:es:%s:%s:domain/%s", *region, *account, kbDomainName)
+	domain := awsopensearchservice.NewDomain(stack, jsii.String("KbDomain"), &awsopensearchservice.DomainProps{
+		DomainName: jsii.String(kbDomainName),
+		Version:    awsopensearchservice.EngineVersion_OPENSEARCH_2_13(),
+		Capacity: &awsopensearchservice.CapacityConfig{
+			DataNodes:            jsii.Number(1),
+			DataNodeInstanceType: jsii.String("t3.small.search"),
+		},
+		Ebs: &awsopensearchservice.EbsOptions{
+			Enabled:    jsii.Bool(true),
+			VolumeSize: jsii.Number(10),
+			VolumeType: awsec2.EbsDeviceVolumeType_GP3,
+		},
+		EncryptionAtRest:     &awsopensearchservice.EncryptionAtRestOptions{Enabled: jsii.Bool(true)},
+		NodeToNodeEncryption: jsii.Bool(true),
+		EnforceHttps:         jsii.Bool(true),
+		AccessPolicies: &[]awsiam.PolicyStatement{
+			awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+				Effect:     awsiam.Effect_ALLOW,
+				Principals: &[]awsiam.IPrincipal{awsiam.NewAccountRootPrincipal()},
+				Actions:    jsii.Strings("es:ESHttp*"),
+				Resources:  jsii.Strings(domainArn + "/*"),
+			}),
+		},
 	})
-	network := awsopensearchserverless.NewCfnSecurityPolicy(stack, jsii.String("KbNetworkPolicy"), &awsopensearchserverless.CfnSecurityPolicyProps{
-		Name: jsii.String(kbNetworkPolicyName),
-		Type: jsii.String("network"),
-		Policy: jsii.String(mustJSON([]map[string]any{{
-			"Rules": []map[string]any{
-				{"ResourceType": "collection", "Resource": []string{"collection/" + kbCollectionName}},
-				{"ResourceType": "dashboard", "Resource": []string{"collection/" + kbCollectionName}},
-			},
-			"AllowFromPublic": true,
-		}})),
-	})
-
-	// NextGen collection group: the scale-to-zero generation, so there is no OCU floor. NextGen
-	// requires standby replicas ENABLED (the service rejects DISABLED for this generation).
-	group := awsopensearchserverless.NewCfnCollectionGroup(stack, jsii.String("KbCollectionGroup"), &awsopensearchserverless.CfnCollectionGroupProps{
-		Name:            jsii.String(kbCollectionGroup),
-		Generation:      jsii.String("NEXTGEN"),
-		StandbyReplicas: jsii.String("ENABLED"),
-	})
-
-	collection := awsopensearchserverless.NewCfnCollection(stack, jsii.String("KbCollection"), &awsopensearchserverless.CfnCollectionProps{
-		Name:                jsii.String(kbCollectionName),
-		Type:                jsii.String("VECTORSEARCH"),
-		CollectionGroupName: jsii.String(kbCollectionGroup),
-	})
-	collection.AddDependency(encryption)
-	collection.AddDependency(network)
-	collection.AddDependency(group)
+	domain.ApplyRemovalPolicy(awscdk.RemovalPolicy_DESTROY)
 
 	// The Knowledge Base's role, trusted by Bedrock only for this account's knowledge bases (closing
-	// the cross-account confused-deputy path), reading the files bucket, invoking the embedding model,
-	// running Bedrock Data Automation to parse scans, and reaching the collection's data plane.
+	// the cross-account confused-deputy path): read the files bucket, invoke the embedding model, run
+	// Bedrock Data Automation to parse scans, and reach the domain over its HTTP API.
+	embedModelArn := jsii.String(fmt.Sprintf("arn:aws:bedrock:%s::foundation-model/%s", *region, embedModel))
 	role := awsiam.NewRole(stack, jsii.String("KbRole"), &awsiam.RoleProps{
 		AssumedBy: awsiam.NewPrincipalWithConditions(
 			awsiam.NewServicePrincipal(jsii.String("bedrock.amazonaws.com"), nil),
@@ -100,7 +117,6 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 			},
 		),
 	})
-	embedModelArn := jsii.String(fmt.Sprintf("arn:aws:bedrock:%s::foundation-model/%s", *region, embedModel))
 	role.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions:   jsii.Strings("bedrock:InvokeModel"),
 		Resources: &[]*string{embedModelArn},
@@ -109,11 +125,6 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 		Actions:   jsii.Strings("s3:GetObject", "s3:ListBucket"),
 		Resources: &[]*string{bucket.BucketArn(), jsii.String(*bucket.BucketArn() + "/*")},
 	}))
-	role.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Actions:   jsii.Strings("aoss:APIAccessAll"),
-		Resources: &[]*string{collection.AttrArn()},
-	}))
-	// Bedrock Data Automation, used by the data source to parse PDFs and image scans.
 	role.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions: jsii.Strings("bedrock:InvokeDataAutomationAsync"),
 		Resources: &[]*string{
@@ -125,51 +136,39 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 		Actions:   jsii.Strings("bedrock:GetDataAutomationStatus"),
 		Resources: &[]*string{jsii.String(fmt.Sprintf("arn:aws:bedrock:%s::data-automation-invocation/*", *region))},
 	}))
+	role.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions:   jsii.Strings("es:DescribeDomain"),
+		Resources: &[]*string{domain.DomainArn()},
+	}))
+	// es:ESHttp* on the domain for the Knowledge Base to read and write documents.
+	domain.GrantReadWrite(role)
 
-	// Data access policy: the KB role reads and writes documents, and the CloudFormation execution
-	// role that creates the index needs the index management verbs, or the deploy fails. Scoped to
-	// the specific data-plane actions each needs rather than aoss:*.
-	cfnExecRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/cdk-%s-cfn-exec-role-%s-%s", *account, cdkQualifier, *account, *region)
-	access := awsopensearchserverless.NewCfnAccessPolicy(stack, jsii.String("KbAccessPolicy"), &awsopensearchserverless.CfnAccessPolicyProps{
-		Name: jsii.String(kbAccessPolicyName),
-		Type: jsii.String("data"),
-		Policy: jsii.String(mustJSON([]map[string]any{{
-			"Rules": []map[string]any{
-				{"ResourceType": "index", "Resource": []string{"index/" + kbCollectionName + "/*"}, "Permission": []string{
-					"aoss:CreateIndex", "aoss:DeleteIndex", "aoss:UpdateIndex", "aoss:DescribeIndex", "aoss:ReadDocument", "aoss:WriteDocument",
-				}},
-				{"ResourceType": "collection", "Resource": []string{"collection/" + kbCollectionName}, "Permission": []string{
-					"aoss:CreateCollectionItems", "aoss:UpdateCollectionItems", "aoss:DescribeCollectionItems",
-				}},
-			},
-			"Principal": []string{*role.RoleArn(), cfnExecRoleArn},
-		}})),
+	// The custom-resource Lambda that creates the vector index, and its access to the domain.
+	indexFn := awslambda.NewFunction(stack, jsii.String("KbIndexInit"), &awslambda.FunctionProps{
+		Runtime: awslambda.Runtime_PYTHON_3_12(),
+		Handler: jsii.String("index.handler"),
+		Timeout: awscdk.Duration_Minutes(jsii.Number(5)),
+		Code:    awslambda.Code_FromInline(jsii.String(indexInitCode)),
 	})
+	domain.GrantReadWrite(indexFn)
 
-	// The vector index the Knowledge Base writes to. Field names must match the KB field mapping.
-	// A NextGen collection auto-selects the vector engine and method, so the field carries only its
-	// type, dimension, and space type; specifying an explicit engine/method (as a Classic collection
-	// would) is rejected with "Field parameter 'engine' is not supported".
-	index := awsopensearchserverless.NewCfnIndex(stack, jsii.String("KbVectorIndex"), &awsopensearchserverless.CfnIndexProps{
-		CollectionEndpoint: collection.AttrCollectionEndpoint(),
-		IndexName:          jsii.String(kbVectorIndexName),
-		Settings: map[string]any{
-			"index": map[string]any{"knn": true},
-		},
-		Mappings: map[string]any{
-			"properties": map[string]any{
-				kbVectorField: map[string]any{
-					"type":       "knn_vector",
-					"dimension":  embedDimension,
-					"space_type": "l2",
-				},
-				kbTextField:     map[string]any{"type": "text"},
-				kbMetadataField: map[string]any{"type": "text", "index": false},
-			},
+	provider := customresources.NewProvider(stack, jsii.String("KbIndexProvider"), &customresources.ProviderProps{
+		OnEventHandler: indexFn,
+	})
+	endpointURL := "https://" + *domain.DomainEndpoint()
+	index := awscdk.NewCustomResource(stack, jsii.String("KbVectorIndex"), &awscdk.CustomResourceProps{
+		ServiceToken: provider.ServiceToken(),
+		Properties: &map[string]interface{}{
+			"Endpoint":      jsii.String(endpointURL),
+			"IndexName":     jsii.String(kbVectorIndexName),
+			"Region":        region,
+			"VectorField":   jsii.String(kbVectorField),
+			"TextField":     jsii.String(kbTextField),
+			"MetadataField": jsii.String(kbMetadataField),
+			"Dimension":     jsii.Number(embedDimension),
 		},
 	})
-	index.AddDependency(collection)
-	index.AddDependency(access)
+	index.Node().AddDependency(domain)
 
 	kb := awsbedrock.NewCfnKnowledgeBase(stack, jsii.String("KnowledgeBase"), &awsbedrock.CfnKnowledgeBaseProps{
 		Name:    jsii.String("VaultKnowledgeBase"),
@@ -181,11 +180,12 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 			},
 		},
 		StorageConfiguration: &awsbedrock.CfnKnowledgeBase_StorageConfigurationProperty{
-			Type: jsii.String("OPENSEARCH_SERVERLESS"),
-			OpensearchServerlessConfiguration: &awsbedrock.CfnKnowledgeBase_OpenSearchServerlessConfigurationProperty{
-				CollectionArn:   collection.AttrArn(),
+			Type: jsii.String("OPENSEARCH_MANAGED_CLUSTER"),
+			OpensearchManagedClusterConfiguration: &awsbedrock.CfnKnowledgeBase_OpenSearchManagedClusterConfigurationProperty{
+				DomainArn:       domain.DomainArn(),
+				DomainEndpoint:  jsii.String(endpointURL),
 				VectorIndexName: jsii.String(kbVectorIndexName),
-				FieldMapping: &awsbedrock.CfnKnowledgeBase_OpenSearchServerlessFieldMappingProperty{
+				FieldMapping: &awsbedrock.CfnKnowledgeBase_OpenSearchManagedClusterFieldMappingProperty{
 					VectorField:   jsii.String(kbVectorField),
 					TextField:     jsii.String(kbTextField),
 					MetadataField: jsii.String(kbMetadataField),
@@ -193,7 +193,7 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 			},
 		},
 	})
-	kb.AddDependency(index)
+	kb.Node().AddDependency(index)
 
 	// The S3 data source, parsed by Bedrock Data Automation so PDFs and image scans yield text and
 	// entities (the passport is an image; without this it would carry no searchable text).
@@ -217,16 +217,7 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("KnowledgeBaseId"), &awscdk.CfnOutputProps{Value: kb.AttrKnowledgeBaseId()})
-	awscdk.NewCfnOutput(stack, jsii.String("KbCollectionArn"), &awscdk.CfnOutputProps{Value: collection.AttrArn()})
+	awscdk.NewCfnOutput(stack, jsii.String("KbDomainEndpoint"), &awscdk.CfnOutputProps{Value: domain.DomainEndpoint()})
 
 	return kb
-}
-
-// mustJSON renders an AOSS policy document to the compact JSON string the L1 property expects.
-func mustJSON(v any) string {
-	data, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return string(data)
 }
