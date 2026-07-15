@@ -24,10 +24,6 @@ const (
 	kbVectorField   = "bedrock-knowledge-base-default-vector"
 	kbTextField     = "AMAZON_BEDROCK_TEXT"
 	kbMetadataField = "AMAZON_BEDROCK_METADATA"
-
-	// kbSupplementalPrefix is the files-bucket prefix where Bedrock Data Automation's extracted
-	// multimodal data is stored; the KB write grant and the supplemental storage URI share it.
-	kbSupplementalPrefix = "kb-supplemental"
 )
 
 // indexInitCode is the inline handler for the custom resource that creates the vector index. A
@@ -77,6 +73,16 @@ def handler(event, context):
 func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKnowledgeBase {
 	region := stack.Region()
 	account := stack.Account()
+
+	// Bedrock Data Automation stores its extracted multimodal data here. Bedrock requires a bucket
+	// root URI with no sub-folder, so this is a dedicated bucket kept apart from the user's files.
+	supplemental := awss3.NewBucket(stack, jsii.String("KbSupplemental"), &awss3.BucketProps{
+		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
+		EnforceSSL:        jsii.Bool(true),
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+		AutoDeleteObjects: jsii.Bool(true),
+	})
 
 	// Managed OpenSearch domain: one small node, encrypted at rest and in transit, HTTPS only. The
 	// access policy allows this account's principals (identity policies below scope who actually
@@ -129,11 +135,8 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 		Actions:   jsii.Strings("s3:GetObject", "s3:ListBucket"),
 		Resources: &[]*string{bucket.BucketArn(), jsii.String(*bucket.BucketArn() + "/*")},
 	}))
-	// The Knowledge Base writes Bedrock Data Automation's extracted multimodal data under this prefix.
-	role.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Actions:   jsii.Strings("s3:PutObject", "s3:GetObject", "s3:DeleteObject"),
-		Resources: &[]*string{jsii.String(*bucket.BucketArn() + "/" + kbSupplementalPrefix + "/*")},
-	}))
+	// Read and write access to the supplemental bucket for Bedrock Data Automation's output.
+	supplemental.GrantReadWrite(role, nil)
 	role.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions: jsii.Strings("bedrock:InvokeDataAutomationAsync"),
 		Resources: &[]*string{
@@ -193,7 +196,7 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 						&awsbedrock.CfnKnowledgeBase_SupplementalDataStorageLocationProperty{
 							SupplementalDataStorageLocationType: jsii.String("S3"),
 							S3Location: &awsbedrock.CfnKnowledgeBase_S3LocationProperty{
-								Uri: jsii.String("s3://" + *bucket.BucketName() + "/" + kbSupplementalPrefix),
+								Uri: jsii.String("s3://" + *supplemental.BucketName()),
 							},
 						},
 					},
