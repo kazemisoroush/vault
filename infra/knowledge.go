@@ -24,6 +24,10 @@ const (
 	kbVectorField   = "bedrock-knowledge-base-default-vector"
 	kbTextField     = "AMAZON_BEDROCK_TEXT"
 	kbMetadataField = "AMAZON_BEDROCK_METADATA"
+
+	// kbSupplementalPrefix is the files-bucket prefix where Bedrock Data Automation's extracted
+	// multimodal data is stored; the KB write grant and the supplemental storage URI share it.
+	kbSupplementalPrefix = "kb-supplemental"
 )
 
 // indexInitCode is the inline handler for the custom resource that creates the vector index. A
@@ -125,6 +129,11 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 		Actions:   jsii.Strings("s3:GetObject", "s3:ListBucket"),
 		Resources: &[]*string{bucket.BucketArn(), jsii.String(*bucket.BucketArn() + "/*")},
 	}))
+	// The Knowledge Base writes Bedrock Data Automation's extracted multimodal data under this prefix.
+	role.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions:   jsii.Strings("s3:PutObject", "s3:GetObject", "s3:DeleteObject"),
+		Resources: &[]*string{jsii.String(*bucket.BucketArn() + "/" + kbSupplementalPrefix + "/*")},
+	}))
 	role.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions: jsii.Strings("bedrock:InvokeDataAutomationAsync"),
 		Resources: &[]*string{
@@ -177,6 +186,18 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 			Type: jsii.String("VECTOR"),
 			VectorKnowledgeBaseConfiguration: &awsbedrock.CfnKnowledgeBase_VectorKnowledgeBaseConfigurationProperty{
 				EmbeddingModelArn: embedModelArn,
+				// Bedrock Data Automation multimodal parsing extracts images and media from scans, so
+				// the Knowledge Base needs an S3 location to store that supplemental data.
+				SupplementalDataStorageConfiguration: &awsbedrock.CfnKnowledgeBase_SupplementalDataStorageConfigurationProperty{
+					SupplementalDataStorageLocations: &[]interface{}{
+						&awsbedrock.CfnKnowledgeBase_SupplementalDataStorageLocationProperty{
+							SupplementalDataStorageLocationType: jsii.String("S3"),
+							S3Location: &awsbedrock.CfnKnowledgeBase_S3LocationProperty{
+								Uri: jsii.String("s3://" + *bucket.BucketName() + "/" + kbSupplementalPrefix),
+							},
+						},
+					},
+				},
 			},
 		},
 		StorageConfiguration: &awsbedrock.CfnKnowledgeBase_StorageConfigurationProperty{
