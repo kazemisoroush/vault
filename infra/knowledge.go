@@ -147,6 +147,9 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 	})
 
 	// The vector index the Knowledge Base writes to. Field names must match the KB field mapping.
+	// A NextGen collection auto-selects the vector engine and method, so the field carries only its
+	// type, dimension, and space type; specifying an explicit engine/method (as a Classic collection
+	// would) is rejected with "Field parameter 'engine' is not supported".
 	index := awsopensearchserverless.NewCfnIndex(stack, jsii.String("KbVectorIndex"), &awsopensearchserverless.CfnIndexProps{
 		CollectionEndpoint: collection.AttrCollectionEndpoint(),
 		IndexName:          jsii.String(kbVectorIndexName),
@@ -156,9 +159,9 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 		Mappings: map[string]any{
 			"properties": map[string]any{
 				kbVectorField: map[string]any{
-					"type":      "knn_vector",
-					"dimension": embedDimension,
-					"method":    map[string]any{"name": "hnsw", "engine": "faiss", "spaceType": "l2"},
+					"type":       "knn_vector",
+					"dimension":  embedDimension,
+					"space_type": "l2",
 				},
 				kbTextField:     map[string]any{"type": "text"},
 				kbMetadataField: map[string]any{"type": "text", "index": false},
