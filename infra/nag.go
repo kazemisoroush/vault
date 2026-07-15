@@ -16,7 +16,7 @@ func suppressNag(stack awscdk.Stack, healthRoute constructs.IConstruct) {
 		},
 		{
 			Id:     jsii.String("AwsSolutions-IAM5"),
-			Reason: jsii.String("Wildcards on the API role are scoped by design: S3 and DynamoDB object- and item-level access from the CDK grant helpers on the single Vault bucket and tables, bedrock:InvokeModel on Anthropic Claude foundation models plus the Titan embeddings model and this account's inference profiles, s3vectors data actions on the single Vault vector index, and lambda:InvokeFunction on this stack's own function-name prefix for the check pipeline's async self-invocation (the exact name would be a circular reference)."),
+			Reason: jsii.String("Wildcards on the API role are scoped by design: S3 and DynamoDB object- and item-level access from the CDK grant helpers on the single Vault bucket and tables, bedrock:InvokeModel on Anthropic Claude foundation models plus the Titan embeddings model and this account's inference profiles, s3vectors data actions on the single Vault vector index, and lambda:InvokeFunction on this stack's own function-name prefix for the check pipeline's async self-invocation (the exact name would be a circular reference). On the Knowledge Base role and the index-init Lambda, es:ESHttp* on the single OpenSearch domain (from the CDK grant helper) plus the account-scoped domain access policy, and bedrock:InvokeDataAutomationAsync / GetDataAutomationStatus on the AWS-owned Bedrock Data Automation profile and invocation ARNs, which have no narrower resource form."),
 		},
 		{
 			Id:     jsii.String("AwsSolutions-S1"),
@@ -57,6 +57,26 @@ func suppressNag(stack awscdk.Stack, healthRoute constructs.IConstruct) {
 		{
 			Id:     jsii.String("AwsSolutions-L1"),
 			Reason: jsii.String("The S3 BucketDeployment and auto-delete custom resources use CDK-managed Lambdas whose runtime is pinned by the CDK version."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-OS1"),
+			Reason: jsii.String("The Knowledge Base OpenSearch domain is public with HTTPS enforced and access gated by IAM (SigV4); a single-user vault avoids the VPC plus NAT/endpoint cost and the in-VPC Lambda complexity. VPC isolation is a hardening follow-up."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-OS3"),
+			Reason: jsii.String("Access is gated by IAM identity policies and the account-scoped domain access policy, not IP allowlists; only the Knowledge Base role and the index-init Lambda can reach the domain."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-OS4"),
+			Reason: jsii.String("A single small data node with no dedicated master nodes keeps the single-user vault inside the budget; dedicated masters are a scale and HA hardening deferred."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-OS7"),
+			Reason: jsii.String("Single-AZ, no zone awareness, for cost; the vector index is rebuilt by re-ingesting the files if the node is lost, so multi-AZ replication is deferred."),
+		},
+		{
+			Id:     jsii.String("AwsSolutions-OS9"),
+			Reason: jsii.String("OpenSearch slow-log export to CloudWatch is deferred to the same hardening pass as the other logging rules; single-user vault."),
 		},
 	}, jsii.Bool(true))
 
