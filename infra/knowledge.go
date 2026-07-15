@@ -71,11 +71,12 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 		}})),
 	})
 
-	// NextGen collection group: scale-to-zero with no standby replicas, so there is no OCU floor.
+	// NextGen collection group: the scale-to-zero generation, so there is no OCU floor. NextGen
+	// requires standby replicas ENABLED (the service rejects DISABLED for this generation).
 	group := awsopensearchserverless.NewCfnCollectionGroup(stack, jsii.String("KbCollectionGroup"), &awsopensearchserverless.CfnCollectionGroupProps{
 		Name:            jsii.String(kbCollectionGroup),
 		Generation:      jsii.String("NEXTGEN"),
-		StandbyReplicas: jsii.String("DISABLED"),
+		StandbyReplicas: jsii.String("ENABLED"),
 	})
 
 	collection := awsopensearchserverless.NewCfnCollection(stack, jsii.String("KbCollection"), &awsopensearchserverless.CfnCollectionProps{
