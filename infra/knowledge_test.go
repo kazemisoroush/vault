@@ -27,7 +27,7 @@ func TestKnowledgeBaseStandsUpNextGenHybridFoundation(t *testing.T) {
 	// Assert: NextGen scale-to-zero (no OCU floor), one collection, and one vector index.
 	template.HasResourceProperties(jsii.String("AWS::OpenSearchServerless::CollectionGroup"), map[string]any{
 		"Generation":      "NEXTGEN",
-		"StandbyReplicas": "DISABLED",
+		"StandbyReplicas": "ENABLED",
 	})
 	template.ResourceCountIs(jsii.String("AWS::OpenSearchServerless::Collection"), jsii.Number(1))
 	template.ResourceCountIs(jsii.String("AWS::OpenSearchServerless::Index"), jsii.Number(1))
