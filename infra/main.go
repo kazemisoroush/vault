@@ -101,6 +101,11 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		},
 	})
 
+	// The managed retrieval foundation: a Bedrock Knowledge Base over the files bucket, backed by an
+	// OpenSearch Serverless NextGen collection. It stands alongside the existing S3 Vectors path
+	// until the retrieval cutover; no app wiring changes here.
+	newKnowledgeBase(stack, bucket)
+
 	// The S3 Vectors bucket and index hold one embedding per file, keyed by file id, for semantic
 	// search. CloudFormation supports these natively, so they are plain L1 resources.
 	vectorBucket := awscdk.NewCfnResource(stack, jsii.String("VectorBucket"), &awscdk.CfnResourceProps{
