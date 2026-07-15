@@ -9,10 +9,11 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
-// TestKnowledgeBaseStandsUpNextGenHybridFoundation checks the managed retrieval foundation: a
-// scale-to-zero NextGen collection, a vector index, a Bedrock Knowledge Base on OpenSearch
-// Serverless, and a data source that parses scans with Bedrock Data Automation.
-func TestKnowledgeBaseStandsUpNextGenHybridFoundation(t *testing.T) {
+// TestKnowledgeBaseStandsUpManagedHybridFoundation checks the managed retrieval foundation: an
+// encrypted OpenSearch managed domain, a custom-resource that creates the vector index, a Bedrock
+// Knowledge Base on the managed cluster, and a data source that parses scans with Bedrock Data
+// Automation.
+func TestKnowledgeBaseStandsUpManagedHybridFoundation(t *testing.T) {
 	// Arrange
 	defer jsii.Close()
 	app := awscdk.NewApp(nil)
@@ -24,17 +25,22 @@ func TestKnowledgeBaseStandsUpNextGenHybridFoundation(t *testing.T) {
 	newKnowledgeBase(stack, bucket)
 	template := assertions.Template_FromStack(stack, nil)
 
-	// Assert: NextGen scale-to-zero (no OCU floor), one collection, and one vector index.
-	template.HasResourceProperties(jsii.String("AWS::OpenSearchServerless::CollectionGroup"), map[string]any{
-		"Generation":      "NEXTGEN",
-		"StandbyReplicas": "ENABLED",
+	// Assert: an encrypted, HTTPS-only OpenSearch domain on a supported version.
+	template.HasResourceProperties(jsii.String("AWS::OpenSearchService::Domain"), map[string]any{
+		"EngineVersion":               "OpenSearch_2.13",
+		"DomainEndpointOptions":       assertions.Match_ObjectLike(&map[string]any{"EnforceHTTPS": true}),
+		"EncryptionAtRestOptions":     assertions.Match_ObjectLike(&map[string]any{"Enabled": true}),
+		"NodeToNodeEncryptionOptions": assertions.Match_ObjectLike(&map[string]any{"Enabled": true}),
 	})
-	template.ResourceCountIs(jsii.String("AWS::OpenSearchServerless::Collection"), jsii.Number(1))
-	template.ResourceCountIs(jsii.String("AWS::OpenSearchServerless::Index"), jsii.Number(1))
 
-	// Assert: the Knowledge Base is backed by OpenSearch Serverless.
+	// Assert: a custom resource creates the vector index (managed domains have no native index resource).
+	template.HasResourceProperties(jsii.String("AWS::CloudFormation::CustomResource"), map[string]any{
+		"IndexName": kbVectorIndexName,
+	})
+
+	// Assert: the Knowledge Base is backed by the managed cluster.
 	template.HasResourceProperties(jsii.String("AWS::Bedrock::KnowledgeBase"), map[string]any{
-		"StorageConfiguration": assertions.Match_ObjectLike(&map[string]any{"Type": "OPENSEARCH_SERVERLESS"}),
+		"StorageConfiguration": assertions.Match_ObjectLike(&map[string]any{"Type": "OPENSEARCH_MANAGED_CLUSTER"}),
 	})
 
 	// Assert: the data source parses scans and PDFs with Bedrock Data Automation.
