@@ -74,5 +74,3 @@ func (f *fakeIndex) Delete(_ context.Context, id string) error {
 	delete(f.files, id)
 	return nil
 }
-
-// cosine is the cosine similarity of two equal-length vectors, zero when either has no magnitude.

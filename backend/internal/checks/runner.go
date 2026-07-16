@@ -20,6 +20,11 @@ type retriever interface {
 // candidateLimit is how many of the owner's files the judge sees per claim.
 const candidateLimit = int32(3)
 
+// passageLimit is how many chunk passages hybrid retrieval returns before they are merged by
+// file. It exceeds candidateLimit because several passages can come from one file, so the merge
+// still leaves candidateLimit distinct files for the judge.
+const passageLimit = int32(12)
+
 // maxClaims bounds how many sentences one check may spend model calls on. The API's character
 // limit admits pathological inputs of thousands of tiny sentences; past this cap the check is
 // marked failed rather than driving an unbounded run of Bedrock calls.
@@ -237,20 +242,32 @@ func normalizeForMatch(text string) string {
 	return strings.ToLower(strings.Trim(collapsed, " .,;:!?\"'"))
 }
 
-// candidates finds the passages most likely to bear on the claim, by hybrid search over the
-// Knowledge Base, as the files the judge weighs. The passage text is what the gate verifies against.
+// candidates finds the files most likely to bear on the claim, by hybrid search over the
+// Knowledge Base, as the files the judge weighs. Hybrid search returns chunk passages, so several
+// passages can come from one file; they are merged by file, joining the chunk text, so the gate
+// verifies a cited span against all of that file's retrieved text and not just its first chunk.
+// The merged text is what the gate verifies against.
 func (r *Runner) candidates(ctx context.Context, claim string) []candidate {
-	passages, err := r.retriever.Retrieve(ctx, claim, int(candidateLimit))
+	passages, err := r.retriever.Retrieve(ctx, claim, int(passageLimit))
 	if err != nil {
 		log.Printf("retrieve candidates: %v", err)
 		return nil
 	}
 
-	loaded := make([]candidate, 0, len(passages))
+	byFile := make(map[string]int)
+	loaded := make([]candidate, 0, candidateLimit)
 	for _, passage := range passages {
 		if passage.Text == "" {
 			continue
 		}
+		if i, ok := byFile[passage.FileID]; ok {
+			loaded[i].Text += "\n" + passage.Text
+			continue
+		}
+		if int32(len(loaded)) >= candidateLimit {
+			continue
+		}
+		byFile[passage.FileID] = len(loaded)
 		loaded = append(loaded, candidate{FileID: passage.FileID, FileName: passage.FileName, Text: passage.Text})
 	}
 	return loaded
