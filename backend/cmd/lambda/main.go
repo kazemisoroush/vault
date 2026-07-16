@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	lambdasvc "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -23,6 +24,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
 	"github.com/kazemisoroush/vault/backend/internal/transport"
@@ -52,13 +54,16 @@ func main() {
 		log.Fatalf("configure vector store: %v", err)
 	}
 
-	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), embedder, vectorStore, idx)
+	// Retrieval runs against the managed Knowledge Base by hybrid search, for both the agent and the check.
+	retriever := kb.NewRetriever(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
+
+	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), retriever, idx)
 
 	// The check pipeline runs as an async self-invocation, so the API reply is immediate and the
 	// pipeline gets the full function timeout. AWS_LAMBDA_FUNCTION_NAME is set by the runtime.
 	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
 	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
-	runner := checks.NewRunner(checkStore, idx, blobs, embedder, vectorStore, checkModel)
+	runner := checks.NewRunner(checkStore, retriever, checkModel)
 	enqueuer := checks.NewLambdaEnqueuer(lambdasvc.NewFromConfig(awsCfg), cfg.FunctionName)
 
 	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))

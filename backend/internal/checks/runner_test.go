@@ -12,27 +12,30 @@ import (
 
 	"github.com/kazemisoroush/vault/backend/internal/checks"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
-// contractText and emailText are the stored canonical texts of the two candidate files.
+// contractText and emailText are the passages the retriever returns for the two candidate files.
 const (
 	contractText = "The contract was executed on 14 February 2023. The deposit of $40,000 was payable within seven days."
 	emailText    = "We regret to advise the deposit was not paid within seven days; funds cleared on 2 March."
 )
 
-// newRunnerFixture wires a Runner whose stores hold one owner, two files with stored text, and
-// one pending check. The split is pure code now, so every scripted converser reply is a judge
-// reply, one per claim, in claim order.
+// fakeRetriever returns fixed passages, standing in for hybrid retrieval over the Knowledge Base.
+type fakeRetriever struct{ passages []kb.Passage }
+
+func (f fakeRetriever) Retrieve(_ context.Context, _ string, _ int) ([]kb.Passage, error) {
+	return f.passages, nil
+}
+
+// newRunnerFixture wires a Runner whose retriever returns two candidate passages and one pending
+// check. The split is pure code, so every scripted converser reply is a judge reply, one per claim.
 func newRunnerFixture(t *testing.T, checkText string, judgeReplies ...string) (*checks.Runner, *domain.Check) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 
 	store := mocks.NewMockCheckStore(ctrl)
-	idx := mocks.NewMockIndex(ctrl)
-	blobs := mocks.NewMockStore(ctrl)
-	embedder := mocks.NewMockEmbedder(ctrl)
-	vectors := mocks.NewMockVectorStore(ctrl)
 	model := mocks.NewMockConverser(ctrl)
 
 	check := &domain.Check{ID: "chk-1", OwnerID: "alice", Text: checkText, Status: domain.CheckPending}
@@ -46,15 +49,13 @@ func newRunnerFixture(t *testing.T, checkText string, judgeReplies ...string) (*
 		model.EXPECT().Converse(gomock.Any(), gomock.Any()).Return(reply, nil)
 	}
 
-	// Every claim resolves to the same two candidate files with stored text.
-	embedder.EXPECT().Embed(gomock.Any(), gomock.Any()).Return([]float32{0.5}, nil).AnyTimes()
-	vectors.EXPECT().Query(gomock.Any(), "alice", gomock.Any(), gomock.Any()).Return([]string{"file-1", "file-2"}, nil).AnyTimes()
-	idx.EXPECT().Get(gomock.Any(), "file-1").Return(domain.File{ID: "file-1", OwnerID: "alice", Name: "Contract of Sale.pdf"}, nil).AnyTimes()
-	idx.EXPECT().Get(gomock.Any(), "file-2").Return(domain.File{ID: "file-2", OwnerID: "alice", Name: "Email chain.pdf"}, nil).AnyTimes()
-	blobs.EXPECT().Get(gomock.Any(), "text/file-1").Return([]byte(contractText), "text/plain", nil).AnyTimes()
-	blobs.EXPECT().Get(gomock.Any(), "text/file-2").Return([]byte(emailText), "text/plain", nil).AnyTimes()
+	// Every claim resolves to the same two candidate passages.
+	retriever := fakeRetriever{passages: []kb.Passage{
+		{FileID: "file-1", FileName: "Contract of Sale.pdf", Text: contractText},
+		{FileID: "file-2", FileName: "Email chain.pdf", Text: emailText},
+	}}
 
-	return checks.NewRunner(store, idx, blobs, embedder, vectors, model), check
+	return checks.NewRunner(store, retriever, model), check
 }
 
 func TestRunVerifiesVerbatimSpanThroughTheGate(t *testing.T) {
@@ -170,8 +171,7 @@ func TestRunRefusesForeignOwner(t *testing.T) {
 	store := mocks.NewMockCheckStore(ctrl)
 	store.EXPECT().Get(gomock.Any(), "chk-1").Return(domain.Check{ID: "chk-1", OwnerID: "alice"}, nil)
 
-	runner := checks.NewRunner(store, mocks.NewMockIndex(ctrl), mocks.NewMockStore(ctrl),
-		mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl), mocks.NewMockConverser(ctrl))
+	runner := checks.NewRunner(store, fakeRetriever{}, mocks.NewMockConverser(ctrl))
 
 	// Act
 	err := runner.Run(context.Background(), "chk-1", "mallory")
@@ -195,8 +195,7 @@ func TestRunExpiredDeadlineMarksCheckFailed(t *testing.T) {
 		return nil
 	}).AnyTimes()
 
-	runner := checks.NewRunner(store, mocks.NewMockIndex(ctrl), mocks.NewMockStore(ctrl),
-		mocks.NewMockEmbedder(ctrl), mocks.NewMockVectorStore(ctrl), mocks.NewMockConverser(ctrl))
+	runner := checks.NewRunner(store, fakeRetriever{}, mocks.NewMockConverser(ctrl))
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()

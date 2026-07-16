@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 

@@ -7,7 +7,7 @@
     {"id": "b", "name": "IMG_0042.heic", "meta": {"vendor": "Shell", "amount": "48.10", "date": "2026-02-14"}}
   ],
   "script": {
-    "calls": [{"name": "find_by_facts", "input": {"contains": [{"field": "vendor", "value": "Shell"}]}}],
+    "calls": [{"name": "search_by_meaning", "input": {"query": "Shell petrol receipt"}}],
     "final": "{\"answer\":\"Your last Shell petrol receipt was 52.30 on 5 March 2026.\",\"fileIds\":[\"a\"]}"
   },
   "expect": {"fileIds": ["a"], "answerContains": ["52.30"]}

@@ -7,12 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
-	"github.com/kazemisoroush/vault/backend/internal/index"
-	"github.com/kazemisoroush/vault/backend/internal/vectors"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 )
+
+// retriever finds the passages relevant to a claim in the Knowledge Base by hybrid search.
+// *kb.Retriever satisfies it; the interface lets the runner be tested with a fake.
+type retriever interface {
+	Retrieve(ctx context.Context, query string, limit int) ([]kb.Passage, error)
+}
 
 // candidateLimit is how many of the owner's files the judge sees per claim.
 const candidateLimit = int32(3)
@@ -30,18 +33,15 @@ const maxStoredRefs = 5
 // Runner drives one check through its pipeline: split into claims, find candidate files, judge
 // each claim, and let the gate decide the verdict. The model proposes; the gate disposes.
 type Runner struct {
-	store    Store
-	index    index.Index
-	blobs    blob.Store
-	embedder embed.Embedder
-	vectors  vectors.Store
-	model    Converser
-	now      func() time.Time
+	store     Store
+	retriever retriever
+	model     Converser
+	now       func() time.Time
 }
 
-// NewRunner builds a Runner over the stores that already serve the vault.
-func NewRunner(store Store, idx index.Index, blobs blob.Store, embedder embed.Embedder, vecs vectors.Store, model Converser) *Runner {
-	return &Runner{store: store, index: idx, blobs: blobs, embedder: embedder, vectors: vecs, model: model, now: time.Now}
+// NewRunner builds a Runner over the check store, the Knowledge Base retriever, and the model.
+func NewRunner(store Store, r retriever, model Converser) *Runner {
+	return &Runner{store: store, retriever: r, model: model, now: time.Now}
 }
 
 // failSaveMargin is the slice of the invocation deadline reserved for marking a check failed
@@ -101,7 +101,7 @@ func (r *Runner) run(ctx context.Context, check *domain.Check) error {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("check pipeline interrupted at claim %d of %d: %w", i+1, len(claims), err)
 		}
-		r.decide(ctx, check.OwnerID, &claims[i])
+		r.decide(ctx, &claims[i])
 	}
 	check.Claims = claims
 	return nil
@@ -110,10 +110,10 @@ func (r *Runner) run(ctx context.Context, check *domain.Check) error {
 // decide judges one claim against the owner's candidate files and gates every finding. Every
 // path out of this function assigns a verdict; the only route to verified runs through the
 // gate, and a gate-verified contradiction outranks everything.
-func (r *Runner) decide(ctx context.Context, ownerID string, claim *domain.Claim) {
+func (r *Runner) decide(ctx context.Context, claim *domain.Claim) {
 	claim.Verdict = domain.VerdictUnsupported
 
-	candidates := r.candidates(ctx, ownerID, claim.Text)
+	candidates := r.candidates(ctx, claim.Text)
 	if len(candidates) == 0 {
 		return
 	}
@@ -237,32 +237,21 @@ func normalizeForMatch(text string) string {
 	return strings.ToLower(strings.Trim(collapsed, " .,;:!?\"'"))
 }
 
-// candidates finds the owner's files most likely to bear on the claim and loads their stored
-// text. Files without stored text (dropped before text persistence existed) are skipped.
-func (r *Runner) candidates(ctx context.Context, ownerID string, claim string) []candidate {
-	vector, err := r.embedder.Embed(ctx, claim)
+// candidates finds the passages most likely to bear on the claim, by hybrid search over the
+// Knowledge Base, as the files the judge weighs. The passage text is what the gate verifies against.
+func (r *Runner) candidates(ctx context.Context, claim string) []candidate {
+	passages, err := r.retriever.Retrieve(ctx, claim, int(candidateLimit))
 	if err != nil {
-		log.Printf("embed claim (%d chars): %v", len(claim), err)
-		return nil
-	}
-	ids, err := r.vectors.Query(ctx, ownerID, vector, candidateLimit)
-	if err != nil {
-		log.Printf("query candidates: %v", err)
+		log.Printf("retrieve candidates: %v", err)
 		return nil
 	}
 
-	loaded := make([]candidate, 0, len(ids))
-	for _, id := range ids {
-		file, err := r.index.Get(ctx, id)
-		if err != nil || file.OwnerID != ownerID {
+	loaded := make([]candidate, 0, len(passages))
+	for _, passage := range passages {
+		if passage.Text == "" {
 			continue
 		}
-		text, _, err := r.blobs.Get(ctx, blob.TextKey(id))
-		if err != nil || len(text) == 0 {
-			log.Printf("candidate %s has no stored text, skipped (re-drop the file to backfill)", id)
-			continue
-		}
-		loaded = append(loaded, candidate{FileID: file.ID, FileName: file.Name, Text: string(text)})
+		loaded = append(loaded, candidate{FileID: passage.FileID, FileName: passage.FileName, Text: passage.Text})
 	}
 	return loaded
 }

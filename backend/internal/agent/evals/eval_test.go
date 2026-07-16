@@ -16,12 +16,11 @@ import (
 // cites the expected files and contains the expected text.
 func runCase(t *testing.T, model agent.Converser, c Case) {
 	t.Helper()
-	embedder := fakeEmbedder{}
-	vectors := newFakeVectors()
+	retriever := &fakeRetriever{}
 	idx := newFakeIndex()
-	require.NoError(t, seed(idx, vectors, embedder, c))
+	require.NoError(t, seed(idx, retriever, c))
 
-	answerer := agent.NewAgent(model, embedder, vectors, idx)
+	answerer := agent.NewAgent(model, retriever, idx)
 	result, err := answerer.Answer(context.Background(), c.Owner, c.Query)
 	require.NoError(t, err)
 

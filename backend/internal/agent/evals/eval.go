@@ -94,8 +94,9 @@ func LoadCases() ([]Case, error) {
 	return cases, nil
 }
 
-// seed loads a case's files into the fake stores, mirroring what ingest does on drop.
-func seed(idx *fakeIndex, vectors *fakeVectors, embedder fakeEmbedder, c Case) error {
+// seed loads a case's files into the fake index and retriever, mirroring what ingest does on drop:
+// the file is registered and made retrievable.
+func seed(idx *fakeIndex, retriever *fakeRetriever, c Case) error {
 	ctx := context.Background()
 	for _, cf := range c.Files {
 		file := domain.File{
@@ -109,13 +110,7 @@ func seed(idx *fakeIndex, vectors *fakeVectors, embedder fakeEmbedder, c Case) e
 		if err := idx.Put(ctx, file); err != nil {
 			return fmt.Errorf("index case file %q: %w", cf.ID, err)
 		}
-		vector, err := embedder.Embed(ctx, file.SearchText())
-		if err != nil {
-			return fmt.Errorf("embed case file %q: %w", cf.ID, err)
-		}
-		if err := vectors.Put(ctx, file.ID, c.Owner, vector); err != nil {
-			return fmt.Errorf("store vector for case file %q: %w", cf.ID, err)
-		}
+		retriever.add(file)
 	}
 	return nil
 }
