@@ -18,20 +18,20 @@ const (
 	MetaFileName = "fileName"
 )
 
-// Client is the slice of the Bedrock agent-runtime API the Retriever uses, kept small to fake in tests.
-type Client interface {
+// client is the slice of the Bedrock agent-runtime API the Retriever uses, kept small to fake in tests.
+type client interface {
 	Retrieve(ctx context.Context, in *bedrockagentruntime.RetrieveInput, optFns ...func(*bedrockagentruntime.Options)) (*bedrockagentruntime.RetrieveOutput, error)
 }
 
 // Retriever finds passages in the Knowledge Base by hybrid search, combining vector similarity with
 // keyword (BM25) scoring, so an exact token such as a passport number ranks as well as a paraphrase.
 type Retriever struct {
-	client Client
+	client client
 	kbID   string
 }
 
 // NewRetriever builds a Retriever over a Knowledge Base id.
-func NewRetriever(client Client, kbID string) *Retriever {
+func NewRetriever(client client, kbID string) *Retriever {
 	return &Retriever{client: client, kbID: kbID}
 }
 
