@@ -11,12 +11,6 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/kb"
 )
 
-// searcher finds the passages relevant to a claim in the Knowledge Base by hybrid search.
-// *kb.Searcher satisfies it; the interface lets the verifier be tested with a fake.
-type searcher interface {
-	Search(ctx context.Context, query string, limit int) ([]kb.Passage, error)
-}
-
 // fileIndex reads a stored file by id, so the verifier can drop retrieved candidates whose file the
 // claim's owner does not own. *index.DynamoIndex satisfies it; the interface keeps the verifier
 // testable with a fake.
@@ -46,7 +40,7 @@ const maxStoredRefs = 5
 // each claim, and let the gate decide the verdict. The model proposes; the gate disposes.
 type Verifier struct {
 	store    Store
-	searcher searcher
+	searcher kb.PassageSearcher
 	files    fileIndex
 	model    Converser
 	now      func() time.Time
@@ -54,7 +48,7 @@ type Verifier struct {
 
 // NewVerifier builds a Verifier over the check store, the Knowledge Base searcher, the file index
 // that scopes retrieved candidates to their owner, and the model.
-func NewVerifier(store Store, s searcher, files fileIndex, model Converser) *Verifier {
+func NewVerifier(store Store, s kb.PassageSearcher, files fileIndex, model Converser) *Verifier {
 	return &Verifier{store: store, searcher: s, files: files, model: model, now: time.Now}
 }
 

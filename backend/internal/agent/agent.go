@@ -12,12 +12,6 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
-// searcher finds the passages most relevant to a query in the Knowledge Base, by hybrid search.
-// *kb.Searcher satisfies it; the interface lets the agent be tested with a fake.
-type searcher interface {
-	Search(ctx context.Context, query string, limit int) ([]kb.Passage, error)
-}
-
 // ModelOp is the operation label the agent's model calls are tagged with on the trace.
 const ModelOp = "agent"
 
@@ -38,12 +32,12 @@ type Result struct {
 // the Knowledge Base, and a read of one file's record.
 type Agent struct {
 	model    Converser
-	searcher searcher
+	searcher kb.PassageSearcher
 	index    index.Index
 }
 
 // NewAgent builds an Agent over the model, the Knowledge Base searcher, and the file index.
-func NewAgent(model Converser, s searcher, idx index.Index) *Agent {
+func NewAgent(model Converser, s kb.PassageSearcher, idx index.Index) *Agent {
 	return &Agent{model: model, searcher: s, index: idx}
 }
 
