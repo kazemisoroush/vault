@@ -49,7 +49,7 @@ func (a *Agent) executor(ownerID string) llm.ToolExecutor {
 	return func(ctx context.Context, call llm.ToolCall) (string, error) {
 		switch call.Name {
 		case toolSearchByMeaning:
-			return a.runSearch(ctx, call.Input)
+			return a.runSearch(ctx, ownerID, call.Input)
 		case toolGetFile:
 			return a.runGet(ctx, ownerID, call.Input)
 		default:
@@ -72,9 +72,10 @@ type searchInput struct {
 }
 
 // runSearch retrieves the passages most relevant to the query by hybrid search and returns them for
-// the model to reason over. The Knowledge Base holds only this owner's files, so retrieval is
-// already owner-scoped.
-func (a *Agent) runSearch(ctx context.Context, raw json.RawMessage) (string, error) {
+// the model to reason over. The managed Knowledge Base is one shared store that carries no owner
+// metadata yet, so retrieval is not owner-scoped on its own; every passage is dropped unless its
+// file belongs to ownerID, keeping another owner's text from ever reaching the model.
+func (a *Agent) runSearch(ctx context.Context, ownerID string, raw json.RawMessage) (string, error) {
 	var in searchInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", fmt.Errorf("decode %s input: %w", toolSearchByMeaning, err)
@@ -83,8 +84,18 @@ func (a *Agent) runSearch(ctx context.Context, raw json.RawMessage) (string, err
 	if err != nil {
 		return "", fmt.Errorf("retrieve: %w", err)
 	}
+	owned := make(map[string]bool, len(passages))
 	views := make([]passageView, 0, len(passages))
 	for _, passage := range passages {
+		allow, seen := owned[passage.FileID]
+		if !seen {
+			file, err := a.index.Get(ctx, passage.FileID)
+			allow = err == nil && file.OwnerID == ownerID
+			owned[passage.FileID] = allow
+		}
+		if !allow {
+			continue
+		}
 		views = append(views, passageView{FileID: passage.FileID, FileName: passage.FileName, Text: passage.Text})
 	}
 	data, err := json.Marshal(views)

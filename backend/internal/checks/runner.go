@@ -17,6 +17,13 @@ type retriever interface {
 	Retrieve(ctx context.Context, query string, limit int) ([]kb.Passage, error)
 }
 
+// fileIndex reads a stored file by id, so the runner can drop retrieved candidates whose file the
+// claim's owner does not own. *index.DynamoIndex satisfies it; the interface keeps the runner
+// testable with a fake.
+type fileIndex interface {
+	Get(ctx context.Context, id string) (domain.File, error)
+}
+
 // candidateLimit is how many of the owner's files the judge sees per claim.
 const candidateLimit = int32(3)
 
@@ -40,13 +47,15 @@ const maxStoredRefs = 5
 type Runner struct {
 	store     Store
 	retriever retriever
+	files     fileIndex
 	model     Converser
 	now       func() time.Time
 }
 
-// NewRunner builds a Runner over the check store, the Knowledge Base retriever, and the model.
-func NewRunner(store Store, r retriever, model Converser) *Runner {
-	return &Runner{store: store, retriever: r, model: model, now: time.Now}
+// NewRunner builds a Runner over the check store, the Knowledge Base retriever, the file index
+// that scopes retrieved candidates to their owner, and the model.
+func NewRunner(store Store, r retriever, files fileIndex, model Converser) *Runner {
+	return &Runner{store: store, retriever: r, files: files, model: model, now: time.Now}
 }
 
 // failSaveMargin is the slice of the invocation deadline reserved for marking a check failed
@@ -106,7 +115,7 @@ func (r *Runner) run(ctx context.Context, check *domain.Check) error {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("check pipeline interrupted at claim %d of %d: %w", i+1, len(claims), err)
 		}
-		r.decide(ctx, &claims[i])
+		r.decide(ctx, check.OwnerID, &claims[i])
 	}
 	check.Claims = claims
 	return nil
@@ -115,10 +124,10 @@ func (r *Runner) run(ctx context.Context, check *domain.Check) error {
 // decide judges one claim against the owner's candidate files and gates every finding. Every
 // path out of this function assigns a verdict; the only route to verified runs through the
 // gate, and a gate-verified contradiction outranks everything.
-func (r *Runner) decide(ctx context.Context, claim *domain.Claim) {
+func (r *Runner) decide(ctx context.Context, ownerID string, claim *domain.Claim) {
 	claim.Verdict = domain.VerdictUnsupported
 
-	candidates := r.candidates(ctx, claim.Text)
+	candidates := r.candidates(ctx, ownerID, claim.Text)
 	if len(candidates) == 0 {
 		return
 	}
@@ -247,7 +256,7 @@ func normalizeForMatch(text string) string {
 // passages can come from one file; they are merged by file, joining the chunk text, so the gate
 // verifies a cited span against all of that file's retrieved text and not just its first chunk.
 // The merged text is what the gate verifies against.
-func (r *Runner) candidates(ctx context.Context, claim string) []candidate {
+func (r *Runner) candidates(ctx context.Context, ownerID, claim string) []candidate {
 	passages, err := r.retriever.Retrieve(ctx, claim, int(passageLimit))
 	if err != nil {
 		log.Printf("retrieve candidates: %v", err)
@@ -255,22 +264,34 @@ func (r *Runner) candidates(ctx context.Context, claim string) []candidate {
 	}
 
 	byFile := make(map[string]int)
-	loaded := make([]candidate, 0, candidateLimit)
+	merged := make([]candidate, 0, len(passages))
 	for _, passage := range passages {
 		if passage.Text == "" {
 			continue
 		}
 		if i, ok := byFile[passage.FileID]; ok {
-			loaded[i].Text += "\n" + passage.Text
+			merged[i].Text += "\n" + passage.Text
 			continue
 		}
-		if int32(len(loaded)) >= candidateLimit {
-			continue
-		}
-		byFile[passage.FileID] = len(loaded)
-		loaded = append(loaded, candidate{FileID: passage.FileID, FileName: passage.FileName, Text: passage.Text})
+		byFile[passage.FileID] = len(merged)
+		merged = append(merged, candidate{FileID: passage.FileID, FileName: passage.FileName, Text: passage.Text})
 	}
-	return loaded
+
+	// The managed Knowledge Base is one shared store that carries no owner metadata yet, so drop
+	// every file the claim's owner does not own before the judge ever sees it. Keep the first
+	// candidateLimit owned files.
+	owned := make([]candidate, 0, candidateLimit)
+	for _, c := range merged {
+		if int32(len(owned)) >= candidateLimit {
+			break
+		}
+		file, err := r.files.Get(ctx, c.FileID)
+		if err != nil || file.OwnerID != ownerID {
+			continue
+		}
+		owned = append(owned, c)
+	}
+	return owned
 }
 
 // findCandidate returns the candidate the judge cited.

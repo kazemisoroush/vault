@@ -64,17 +64,45 @@ func TestAnswerRunsSearchAndReturnsCitedFiles(t *testing.T) {
 	}}
 	a, idx := newAgent(t, model, r)
 	idx.EXPECT().Get(gomock.Any(), "a").Return(domain.File{ID: "a", OwnerID: "alice", Name: "petrol", Key: "files/a"}, nil).AnyTimes()
+	idx.EXPECT().Get(gomock.Any(), "b").Return(domain.File{ID: "b", OwnerID: "alice", Name: "ticket", Key: "files/b"}, nil).AnyTimes()
 
 	// Act
 	result, err := a.Answer(context.Background(), "alice", "where did I last buy fuel")
 
-	// Assert: the answer and the one cited file come back, and the search returned both passages.
+	// Assert: the answer and the one cited file come back, and the search returned both passages
+	// because both belong to the caller.
 	require.NoError(t, err)
 	assert.Equal(t, "your last fill was at Shell", result.Text)
 	require.Len(t, result.Files, 1)
 	assert.Equal(t, "a", result.Files[0].ID)
 	assert.Contains(t, model.results[0], `"fileId":"a"`)
 	assert.Contains(t, model.results[0], `"fileId":"b"`)
+}
+
+func TestSearchDropsAForeignOwnerPassage(t *testing.T) {
+	// Arrange: retrieval returns two passages, but only one file belongs to the caller. The
+	// managed Knowledge Base is shared, so the foreign passage must be scoped out before the
+	// model sees it.
+	model := &scriptedModel{
+		calls: []llm.ToolCall{{Name: toolSearchByMeaning, Input: []byte(`{"query":"deposit"}`)}},
+		final: `{"answer":"done","fileIds":[]}`,
+	}
+	r := fakeRetriever{passages: []kb.Passage{
+		{FileID: "mine", FileName: "mine", Text: "my own deposit note"},
+		{FileID: "theirs", FileName: "theirs", Text: "another owner's deposit note"},
+	}}
+	a, idx := newAgent(t, model, r)
+	idx.EXPECT().Get(gomock.Any(), "mine").Return(domain.File{ID: "mine", OwnerID: "alice"}, nil).AnyTimes()
+	idx.EXPECT().Get(gomock.Any(), "theirs").Return(domain.File{ID: "theirs", OwnerID: "mallory"}, nil).AnyTimes()
+
+	// Act
+	_, err := a.Answer(context.Background(), "alice", "show my deposit note")
+
+	// Assert: only the caller's passage reaches the model.
+	require.NoError(t, err)
+	assert.Contains(t, model.results[0], `"fileId":"mine"`)
+	assert.NotContains(t, model.results[0], `"fileId":"theirs"`)
+	assert.NotContains(t, model.results[0], "another owner")
 }
 
 func TestAnswerGetFileHidesAForeignOwner(t *testing.T) {

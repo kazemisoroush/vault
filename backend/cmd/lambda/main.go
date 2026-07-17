@@ -63,7 +63,7 @@ func main() {
 	// pipeline gets the full function timeout. AWS_LAMBDA_FUNCTION_NAME is set by the runtime.
 	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
 	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
-	runner := checks.NewRunner(checkStore, retriever, checkModel)
+	runner := checks.NewRunner(checkStore, retriever, idx, checkModel)
 	enqueuer := checks.NewLambdaEnqueuer(lambdasvc.NewFromConfig(awsCfg), cfg.FunctionName)
 
 	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))

@@ -52,7 +52,7 @@ func main() {
 	// Locally there is no Lambda to self-invoke, so the check pipeline runs in a goroutine.
 	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
 	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
-	runner := checks.NewRunner(checkStore, retriever, checkModel)
+	runner := checks.NewRunner(checkStore, retriever, idx, checkModel)
 	enqueuer := checks.NewLocalEnqueuer(runner)
 
 	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))

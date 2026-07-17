@@ -2,6 +2,7 @@ package checks_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,21 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
+
+// errNoFile stands in for the file index reporting a missing file.
+var errNoFile = errors.New("file not found")
+
+// fakeIndex looks up seeded files by id, standing in for the file index the runner uses to scope
+// retrieved candidates to their owner.
+type fakeIndex struct{ files map[string]domain.File }
+
+func (f fakeIndex) Get(_ context.Context, id string) (domain.File, error) {
+	file, ok := f.files[id]
+	if !ok {
+		return domain.File{}, errNoFile
+	}
+	return file, nil
+}
 
 // contractText and emailText are the passages the retriever returns for the two candidate files.
 const (
@@ -55,7 +71,13 @@ func newRunnerFixture(t *testing.T, checkText string, judgeReplies ...string) (*
 		{FileID: "file-2", FileName: "Email chain.pdf", Text: emailText},
 	}}
 
-	return checks.NewRunner(store, retriever, model), check
+	// Both candidate files belong to the check's owner, so neither is scoped out.
+	index := fakeIndex{files: map[string]domain.File{
+		"file-1": {ID: "file-1", OwnerID: "alice"},
+		"file-2": {ID: "file-2", OwnerID: "alice"},
+	}}
+
+	return checks.NewRunner(store, retriever, index, model), check
 }
 
 func TestRunVerifiesVerbatimSpanThroughTheGate(t *testing.T) {
@@ -165,13 +187,45 @@ func TestRunEmptyFindingsStayUnsupported(t *testing.T) {
 	assert.Equal(t, domain.VerdictUnsupported, check.Claims[0].Verdict)
 }
 
+func TestRunDropsForeignOwnerCandidate(t *testing.T) {
+	// Arrange: the only retrieved passage belongs to another owner, so it must be scoped out
+	// before the judge runs. The model is never expected to be called, so a judge call on the
+	// foreign file would fail the test.
+	ctrl := gomock.NewController(t)
+	store := mocks.NewMockCheckStore(ctrl)
+	model := mocks.NewMockConverser(ctrl)
+
+	check := domain.Check{ID: "chk-1", OwnerID: "alice", Text: "The deposit was paid.", Status: domain.CheckPending}
+	store.EXPECT().Get(gomock.Any(), "chk-1").Return(check, nil)
+	store.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, c domain.Check) error {
+		check = c
+		return nil
+	}).AnyTimes()
+
+	retriever := fakeRetriever{passages: []kb.Passage{
+		{FileID: "file-2", FileName: "Someone else.pdf", Text: emailText},
+	}}
+	index := fakeIndex{files: map[string]domain.File{
+		"file-2": {ID: "file-2", OwnerID: "mallory"},
+	}}
+	runner := checks.NewRunner(store, retriever, index, model)
+
+	// Act
+	require.NoError(t, runner.Run(context.Background(), "chk-1", "alice"))
+
+	// Assert: no owned candidate, so the claim stays unsupported with no references.
+	require.Len(t, check.Claims, 1)
+	assert.Equal(t, domain.VerdictUnsupported, check.Claims[0].Verdict)
+	assert.Empty(t, check.Claims[0].References)
+}
+
 func TestRunRefusesForeignOwner(t *testing.T) {
 	// Arrange: the task claims an owner the check does not belong to.
 	ctrl := gomock.NewController(t)
 	store := mocks.NewMockCheckStore(ctrl)
 	store.EXPECT().Get(gomock.Any(), "chk-1").Return(domain.Check{ID: "chk-1", OwnerID: "alice"}, nil)
 
-	runner := checks.NewRunner(store, fakeRetriever{}, mocks.NewMockConverser(ctrl))
+	runner := checks.NewRunner(store, fakeRetriever{}, fakeIndex{}, mocks.NewMockConverser(ctrl))
 
 	// Act
 	err := runner.Run(context.Background(), "chk-1", "mallory")
@@ -195,7 +249,7 @@ func TestRunExpiredDeadlineMarksCheckFailed(t *testing.T) {
 		return nil
 	}).AnyTimes()
 
-	runner := checks.NewRunner(store, fakeRetriever{}, mocks.NewMockConverser(ctrl))
+	runner := checks.NewRunner(store, fakeRetriever{}, fakeIndex{}, mocks.NewMockConverser(ctrl))
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
