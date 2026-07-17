@@ -21,7 +21,7 @@ type Config struct {
 	EmbedModel    string
 	VectorBucket  string
 	VectorIndex   string
-	// KnowledgeBaseID is the managed Bedrock Knowledge Base the retriever queries by hybrid search.
+	// KnowledgeBaseID is the managed Bedrock Knowledge Base the searcher queries by hybrid search.
 	KnowledgeBaseID string
 	// FunctionName is this Lambda's own name, set by the Lambda runtime. The check pipeline
 	// self-invokes it to run asynchronously; empty outside Lambda.

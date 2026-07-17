@@ -55,15 +55,15 @@ func main() {
 	}
 
 	// Retrieval runs against the managed Knowledge Base by hybrid search, for both the agent and the check.
-	retriever := kb.NewRetriever(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
+	searcher := kb.NewSearcher(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
 
-	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), retriever, idx)
+	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), searcher, idx)
 
 	// The check pipeline runs as an async self-invocation, so the API reply is immediate and the
 	// pipeline gets the full function timeout. AWS_LAMBDA_FUNCTION_NAME is set by the runtime.
 	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
 	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
-	runner := checks.NewRunner(checkStore, retriever, idx, checkModel)
+	verifier := checks.NewVerifier(checkStore, searcher, idx, checkModel)
 	enqueuer := checks.NewLambdaEnqueuer(lambdasvc.NewFromConfig(awsCfg), cfg.FunctionName)
 
 	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
@@ -78,6 +78,6 @@ func main() {
 	}
 	ingester := ingest.NewHandler(idx, blobs, extractor, embedder, vectorStore)
 
-	adapter := transport.NewTransport(proxy, ingester, runner)
+	adapter := transport.NewTransport(proxy, ingester, verifier)
 	lambda.Start(adapter.Handle)
 }

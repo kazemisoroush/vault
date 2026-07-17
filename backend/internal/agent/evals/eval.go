@@ -94,9 +94,9 @@ func LoadCases() ([]Case, error) {
 	return cases, nil
 }
 
-// seed loads a case's files into the fake index and retriever, mirroring what ingest does on drop:
+// seed loads a case's files into the fake index and searcher, mirroring what ingest does on drop:
 // the file is registered and made retrievable.
-func seed(idx *fakeIndex, retriever *fakeRetriever, c Case) error {
+func seed(idx *fakeIndex, searcher *fakeSearcher, c Case) error {
 	ctx := context.Background()
 	for _, cf := range c.Files {
 		file := domain.File{
@@ -110,7 +110,7 @@ func seed(idx *fakeIndex, retriever *fakeRetriever, c Case) error {
 		if err := idx.Put(ctx, file); err != nil {
 			return fmt.Errorf("index case file %q: %w", cf.ID, err)
 		}
-		retriever.add(file)
+		searcher.add(file)
 	}
 	return nil
 }

@@ -12,10 +12,10 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 )
 
-// retriever finds the passages most relevant to a query in the Knowledge Base, by hybrid search.
-// *kb.Retriever satisfies it; the interface lets the agent be tested with a fake.
-type retriever interface {
-	Retrieve(ctx context.Context, query string, limit int) ([]kb.Passage, error)
+// searcher finds the passages most relevant to a query in the Knowledge Base, by hybrid search.
+// *kb.Searcher satisfies it; the interface lets the agent be tested with a fake.
+type searcher interface {
+	Search(ctx context.Context, query string, limit int) ([]kb.Passage, error)
 }
 
 // ModelOp is the operation label the agent's model calls are tagged with on the trace.
@@ -37,14 +37,14 @@ type Result struct {
 // Agent answers queries by driving the model over the vault through its tools: hybrid search over
 // the Knowledge Base, and a read of one file's record.
 type Agent struct {
-	model     Converser
-	retriever retriever
-	index     index.Index
+	model    Converser
+	searcher searcher
+	index    index.Index
 }
 
-// NewAgent builds an Agent over the model, the Knowledge Base retriever, and the file index.
-func NewAgent(model Converser, r retriever, idx index.Index) *Agent {
-	return &Agent{model: model, retriever: r, index: idx}
+// NewAgent builds an Agent over the model, the Knowledge Base searcher, and the file index.
+func NewAgent(model Converser, s searcher, idx index.Index) *Agent {
+	return &Agent{model: model, searcher: s, index: idx}
 }
 
 // Answer lets the model query the owner's vault through the tools and returns the answer with the

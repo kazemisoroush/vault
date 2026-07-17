@@ -80,7 +80,7 @@ func (a *Agent) runSearch(ctx context.Context, ownerID string, raw json.RawMessa
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", fmt.Errorf("decode %s input: %w", toolSearchByMeaning, err)
 	}
-	passages, err := a.retriever.Retrieve(ctx, in.Query, clampLimit(in.Limit))
+	passages, err := a.searcher.Search(ctx, in.Query, clampLimit(in.Limit))
 	if err != nil {
 		return "", fmt.Errorf("retrieve: %w", err)
 	}

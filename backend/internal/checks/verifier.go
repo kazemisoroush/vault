@@ -11,14 +11,14 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/kb"
 )
 
-// retriever finds the passages relevant to a claim in the Knowledge Base by hybrid search.
-// *kb.Retriever satisfies it; the interface lets the runner be tested with a fake.
-type retriever interface {
-	Retrieve(ctx context.Context, query string, limit int) ([]kb.Passage, error)
+// searcher finds the passages relevant to a claim in the Knowledge Base by hybrid search.
+// *kb.Searcher satisfies it; the interface lets the verifier be tested with a fake.
+type searcher interface {
+	Search(ctx context.Context, query string, limit int) ([]kb.Passage, error)
 }
 
-// fileIndex reads a stored file by id, so the runner can drop retrieved candidates whose file the
-// claim's owner does not own. *index.DynamoIndex satisfies it; the interface keeps the runner
+// fileIndex reads a stored file by id, so the verifier can drop retrieved candidates whose file the
+// claim's owner does not own. *index.DynamoIndex satisfies it; the interface keeps the verifier
 // testable with a fake.
 type fileIndex interface {
 	Get(ctx context.Context, id string) (domain.File, error)
@@ -27,7 +27,7 @@ type fileIndex interface {
 // candidateLimit is how many of the owner's files the judge sees per claim.
 const candidateLimit = int32(3)
 
-// passageLimit is how many chunk passages hybrid retrieval returns before they are merged by
+// passageLimit is how many chunk passages hybrid search returns before they are merged by
 // file. It exceeds candidateLimit because several passages can come from one file, so the merge
 // still leaves candidateLimit distinct files for the judge.
 const passageLimit = int32(12)
@@ -42,31 +42,31 @@ const maxClaims = 500
 // or hide what the verdict weighed.
 const maxStoredRefs = 5
 
-// Runner drives one check through its pipeline: split into claims, find candidate files, judge
+// Verifier drives one check through its pipeline: split into claims, find candidate files, judge
 // each claim, and let the gate decide the verdict. The model proposes; the gate disposes.
-type Runner struct {
-	store     Store
-	retriever retriever
-	files     fileIndex
-	model     Converser
-	now       func() time.Time
+type Verifier struct {
+	store    Store
+	searcher searcher
+	files    fileIndex
+	model    Converser
+	now      func() time.Time
 }
 
-// NewRunner builds a Runner over the check store, the Knowledge Base retriever, the file index
+// NewVerifier builds a Verifier over the check store, the Knowledge Base searcher, the file index
 // that scopes retrieved candidates to their owner, and the model.
-func NewRunner(store Store, r retriever, files fileIndex, model Converser) *Runner {
-	return &Runner{store: store, retriever: r, files: files, model: model, now: time.Now}
+func NewVerifier(store Store, s searcher, files fileIndex, model Converser) *Verifier {
+	return &Verifier{store: store, searcher: s, files: files, model: model, now: time.Now}
 }
 
 // failSaveMargin is the slice of the invocation deadline reserved for marking a check failed
 // when the pipeline itself runs out of time, so a timeout cannot strand a check in running.
 const failSaveMargin = 10 * time.Second
 
-// Run executes the pipeline for one check. Once the check is marked running, every way out of
+// Verify executes the pipeline for one check. Once the check is marked running, every way out of
 // this function moves it to done or failed: a pipeline error, and the invocation deadline
 // itself, both land on failed rather than stranding the check.
-func (r *Runner) Run(ctx context.Context, checkID string, ownerID string) error {
-	check, err := r.store.Get(ctx, checkID)
+func (v *Verifier) Verify(ctx context.Context, checkID string, ownerID string) error {
+	check, err := v.store.Get(ctx, checkID)
 	if err != nil {
 		return fmt.Errorf("load check %q: %w", checkID, err)
 	}
@@ -75,7 +75,7 @@ func (r *Runner) Run(ctx context.Context, checkID string, ownerID string) error 
 	}
 
 	check.Status = domain.CheckRunning
-	if err := r.save(ctx, &check); err != nil {
+	if err := v.save(ctx, &check); err != nil {
 		return fmt.Errorf("mark check %q running: %w", check.ID, err)
 	}
 
@@ -88,24 +88,24 @@ func (r *Runner) Run(ctx context.Context, checkID string, ownerID string) error 
 		defer cancel()
 	}
 
-	if err := r.run(runCtx, &check); err != nil {
+	if err := v.process(runCtx, &check); err != nil {
 		check.Status = domain.CheckFailed
-		if saveErr := r.save(ctx, &check); saveErr != nil {
+		if saveErr := v.save(ctx, &check); saveErr != nil {
 			log.Printf("mark check %s failed: %v", check.ID, saveErr)
 		}
-		return fmt.Errorf("run check %q: %w", check.ID, err)
+		return fmt.Errorf("verify check %q: %w", check.ID, err)
 	}
 
 	check.Status = domain.CheckDone
-	if err := r.save(ctx, &check); err != nil {
+	if err := v.save(ctx, &check); err != nil {
 		return fmt.Errorf("mark check %q done: %w", check.ID, err)
 	}
 	return nil
 }
 
-// run splits the text and takes every claim through judge and gate. The split is pure code, so
+// process splits the text and takes every claim through judge and gate. The split is pure code, so
 // coverage is total by construction and the pipeline's first model call is the judge.
-func (r *Runner) run(ctx context.Context, check *domain.Check) error {
+func (v *Verifier) process(ctx context.Context, check *domain.Check) error {
 	claims := split(check.Text)
 	if len(claims) > maxClaims {
 		return fmt.Errorf("check has %d sentences, over the %d cap", len(claims), maxClaims)
@@ -115,7 +115,7 @@ func (r *Runner) run(ctx context.Context, check *domain.Check) error {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("check pipeline interrupted at claim %d of %d: %w", i+1, len(claims), err)
 		}
-		r.decide(ctx, check.OwnerID, &claims[i])
+		v.decide(ctx, check.OwnerID, &claims[i])
 	}
 	check.Claims = claims
 	return nil
@@ -124,15 +124,15 @@ func (r *Runner) run(ctx context.Context, check *domain.Check) error {
 // decide judges one claim against the owner's candidate files and gates every finding. Every
 // path out of this function assigns a verdict; the only route to verified runs through the
 // gate, and a gate-verified contradiction outranks everything.
-func (r *Runner) decide(ctx context.Context, ownerID string, claim *domain.Claim) {
+func (v *Verifier) decide(ctx context.Context, ownerID string, claim *domain.Claim) {
 	claim.Verdict = domain.VerdictUnsupported
 
-	candidates := r.candidates(ctx, ownerID, claim.Text)
+	candidates := v.candidates(ctx, ownerID, claim.Text)
 	if len(candidates) == 0 {
 		return
 	}
 
-	findings, err := judge(ctx, r.model, claim.Text, candidates)
+	findings, err := judge(ctx, v.model, claim.Text, candidates)
 	if err != nil {
 		// The claim text stays out of the logs: it can carry the user's legal matter.
 		log.Printf("judge claim at %d..%d: %v", claim.Start, claim.End, err)
@@ -141,7 +141,7 @@ func (r *Runner) decide(ctx context.Context, ownerID string, claim *domain.Claim
 
 	refs := make([]domain.Reference, 0, len(findings))
 	for _, f := range findings {
-		if ref, ok := r.gateFinding(claim, f, candidates); ok {
+		if ref, ok := v.gateFinding(claim, f, candidates); ok {
 			refs = append(refs, ref)
 		}
 	}
@@ -175,7 +175,7 @@ func capRefs(refs []domain.Reference) []domain.Reference {
 // the code-level claim-span comparison or it is demoted to paraphrase, which closes the
 // injection route where a hostile document steers the judge to call an existing-but-irrelevant
 // span "verbatim".
-func (r *Runner) gateFinding(claim *domain.Claim, f finding, candidates []candidate) (domain.Reference, bool) {
+func (v *Verifier) gateFinding(claim *domain.Claim, f finding, candidates []candidate) (domain.Reference, bool) {
 	if f.Span == "" {
 		return domain.Reference{}, false
 	}
@@ -256,10 +256,10 @@ func normalizeForMatch(text string) string {
 // passages can come from one file; they are merged by file, joining the chunk text, so the gate
 // verifies a cited span against all of that file's retrieved text and not just its first chunk.
 // The merged text is what the gate verifies against.
-func (r *Runner) candidates(ctx context.Context, ownerID, claim string) []candidate {
-	passages, err := r.retriever.Retrieve(ctx, claim, int(passageLimit))
+func (v *Verifier) candidates(ctx context.Context, ownerID, claim string) []candidate {
+	passages, err := v.searcher.Search(ctx, claim, int(passageLimit))
 	if err != nil {
-		log.Printf("retrieve candidates: %v", err)
+		log.Printf("search candidates: %v", err)
 		return nil
 	}
 
@@ -285,7 +285,7 @@ func (r *Runner) candidates(ctx context.Context, ownerID, claim string) []candid
 		if int32(len(owned)) >= candidateLimit {
 			break
 		}
-		file, err := r.files.Get(ctx, c.FileID)
+		file, err := v.files.Get(ctx, c.FileID)
 		if err != nil || file.OwnerID != ownerID {
 			continue
 		}
@@ -305,9 +305,9 @@ func findCandidate(candidates []candidate, fileID string) (candidate, bool) {
 }
 
 // save stamps and persists the check.
-func (r *Runner) save(ctx context.Context, check *domain.Check) error {
-	check.UpdatedAt = r.now().UTC()
-	if err := r.store.Put(ctx, *check); err != nil {
+func (v *Verifier) save(ctx context.Context, check *domain.Check) error {
+	check.UpdatedAt = v.now().UTC()
+	if err := v.store.Put(ctx, *check); err != nil {
 		return fmt.Errorf("save check %q: %w", check.ID, err)
 	}
 	return nil

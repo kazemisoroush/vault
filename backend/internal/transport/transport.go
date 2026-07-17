@@ -14,22 +14,22 @@ import (
 // Proxy handles an API Gateway HTTP request.
 type Proxy func(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error)
 
-// CheckRunner runs one queued check pipeline.
-type CheckRunner interface {
-	Run(ctx context.Context, checkID string, ownerID string) error
+// CheckVerifier verifies one queued check pipeline.
+type CheckVerifier interface {
+	Verify(ctx context.Context, checkID string, ownerID string) error
 }
 
-// Transport routes an S3 event to ingestion, a check task to the check runner, and every other
+// Transport routes an S3 event to ingestion, a check task to the check verifier, and every other
 // event to the HTTP proxy.
 type Transport struct {
 	proxy    Proxy
 	ingester Ingester
-	checks   CheckRunner
+	checks   CheckVerifier
 }
 
-// NewTransport builds a Transport over the HTTP proxy, the ingester, and the check runner.
-func NewTransport(proxy Proxy, ingester Ingester, checkRunner CheckRunner) *Transport {
-	return &Transport{proxy: proxy, ingester: ingester, checks: checkRunner}
+// NewTransport builds a Transport over the HTTP proxy, the ingester, and the check verifier.
+func NewTransport(proxy Proxy, ingester Ingester, checkVerifier CheckVerifier) *Transport {
+	return &Transport{proxy: proxy, ingester: ingester, checks: checkVerifier}
 }
 
 // Handle routes one raw Lambda event by its source.
@@ -46,8 +46,8 @@ func (t *Transport) Handle(ctx context.Context, raw json.RawMessage) (any, error
 	}
 
 	if task, ok := checkTask(raw); ok {
-		if err := t.checks.Run(ctx, task.CheckID, task.OwnerID); err != nil {
-			return nil, fmt.Errorf("run check task: %w", err)
+		if err := t.checks.Verify(ctx, task.CheckID, task.OwnerID); err != nil {
+			return nil, fmt.Errorf("verify check task: %w", err)
 		}
 		return nil, nil
 	}

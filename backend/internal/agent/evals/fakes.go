@@ -12,17 +12,17 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/kb"
 )
 
-// fakeRetriever returns the seeded case files as passages, standing in for hybrid retrieval over the
+// fakeSearcher returns the seeded case files as passages, standing in for hybrid search over the
 // Knowledge Base. The scripted model (offline) or the real model (Bedrock) picks the right file.
-type fakeRetriever struct {
+type fakeSearcher struct {
 	passages []kb.Passage
 }
 
-func (f *fakeRetriever) add(file domain.File) {
+func (f *fakeSearcher) add(file domain.File) {
 	f.passages = append(f.passages, kb.Passage{FileID: file.ID, FileName: file.Name, Text: file.SearchText()})
 }
 
-func (f *fakeRetriever) Retrieve(_ context.Context, _ string, _ int) ([]kb.Passage, error) {
+func (f *fakeSearcher) Search(_ context.Context, _ string, _ int) ([]kb.Passage, error) {
 	return f.passages, nil
 }
 

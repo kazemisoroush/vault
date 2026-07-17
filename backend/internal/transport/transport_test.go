@@ -33,7 +33,7 @@ func TestHandleRoutesS3ToIngester(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{}, nil
 	}
-	adapter := transport.NewTransport(proxy, ingester, stubRunner{})
+	adapter := transport.NewTransport(proxy, ingester, stubVerifier{})
 
 	// Act
 	_, err := adapter.Handle(context.Background(), json.RawMessage(s3Payload))
@@ -53,7 +53,7 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 	}
-	adapter := transport.NewTransport(proxy, ingester, stubRunner{})
+	adapter := transport.NewTransport(proxy, ingester, stubVerifier{})
 
 	// Act
 	resp, err := adapter.Handle(context.Background(), json.RawMessage(apiPayload))
@@ -64,14 +64,14 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 	assert.Equal(t, 200, resp.(events.APIGatewayV2HTTPResponse).StatusCode)
 }
 
-// stubRunner satisfies transport.CheckRunner for tests that never route a check task.
-type stubRunner struct {
-	run func(ctx context.Context, checkID string, ownerID string) error
+// stubVerifier satisfies transport.CheckVerifier for tests that never route a check task.
+type stubVerifier struct {
+	verify func(ctx context.Context, checkID string, ownerID string) error
 }
 
-func (s stubRunner) Run(ctx context.Context, checkID string, ownerID string) error {
-	if s.run == nil {
+func (s stubVerifier) Verify(ctx context.Context, checkID string, ownerID string) error {
+	if s.verify == nil {
 		return nil
 	}
-	return s.run(ctx, checkID, ownerID)
+	return s.verify(ctx, checkID, ownerID)
 }
