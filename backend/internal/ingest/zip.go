@@ -12,10 +12,11 @@ import (
 )
 
 // expand explodes an archive into individual staged uploads, one per inner file, so the normal
-// pipeline ingests each on its own (metadata, embedding, and the throttle redrive included). The
-// archive itself is never stored as a file. A child upload id is derived from the archive hash and
-// the entry path, so a redriven expansion re-stages the same ids rather than duplicating files. An
-// archive that yields no files is marked failed rather than vanishing.
+// pipeline settles each on its own (stored under its content hash, its Knowledge Base metadata
+// sidecar written, and recorded as landed). The archive itself is never stored as a file. A child
+// upload id is derived from the archive hash and the entry path, so a redriven expansion re-stages
+// the same ids rather than duplicating files. An archive that yields no files is marked failed
+// rather than vanishing.
 func (h *Handler) expand(ctx context.Context, archiveFile domain.File, stagingKey string, content []byte) error {
 	zipHash := hashHex(content)
 	staged := 0

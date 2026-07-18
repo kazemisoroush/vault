@@ -8,15 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime"
-	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime/types"
-)
-
-// Metadata keys the ingestion side stamps on each document and the searcher reads back, so a
-// retrieved passage can be tied to the file it came from.
-const (
-	MetaFileID   = "fileId"
-	MetaFileName = "fileName"
 )
 
 // client is the slice of the Bedrock agent-runtime API the BedrockSearcher uses, kept small to fake in tests.
@@ -76,18 +68,4 @@ func (s *BedrockSearcher) Search(ctx context.Context, query string, limit int) (
 		passages = append(passages, passage)
 	}
 	return passages, nil
-}
-
-// metaString reads a string metadata value the ingestion side stamped, or "" when it is absent or
-// not a string.
-func metaString(meta map[string]document.Interface, key string) string {
-	doc, ok := meta[key]
-	if !ok {
-		return ""
-	}
-	var value string
-	if err := doc.UnmarshalSmithyDocument(&value); err != nil {
-		return ""
-	}
-	return value
 }

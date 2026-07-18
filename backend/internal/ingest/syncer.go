@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/kb"
@@ -14,25 +13,25 @@ import (
 // before starting the job; any landed files past the batch are drained by later runs.
 const syncBatch = 100
 
-// fileStatusIndex lists files by lifecycle status and writes them back, so the syncer can advance
-// landed files to ingested. *index.DynamoIndex satisfies it; the interface keeps the syncer testable.
+// fileStatusIndex lists files by lifecycle status and advances a file's status, so the syncer can
+// move landed files to ingested. *index.DynamoIndex satisfies it; the interface keeps the syncer
+// testable.
 type fileStatusIndex interface {
 	ListByStatus(ctx context.Context, status string, limit int32) ([]domain.File, error)
-	Put(ctx context.Context, file domain.File) error
+	AdvanceStatus(ctx context.Context, id string, from string, to string) error
 }
 
 // Syncer advances landed files to ingested. Driven by a schedule, it snapshots the landed files,
-// runs one Knowledge Base ingestion job over the data source, and on completion marks that snapshot
-// ingested, so a file is searchable a short while after it lands.
+// runs one Knowledge Base ingestion job over the data source, and on completion advances that
+// snapshot to ingested, so a file is searchable a short while after it lands.
 type Syncer struct {
 	indexer kb.Indexer
 	index   fileStatusIndex
-	now     func() time.Time
 }
 
 // NewSyncer builds a Syncer over the Knowledge Base indexer and the file index.
 func NewSyncer(indexer kb.Indexer, index fileStatusIndex) *Syncer {
-	return &Syncer{indexer: indexer, index: index, now: time.Now}
+	return &Syncer{indexer: indexer, index: index}
 }
 
 // Sync advances a batch of landed files to ingested once the Knowledge Base has indexed them. The
@@ -56,11 +55,11 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	}
 
 	for _, file := range landed {
-		file.Status = domain.StatusIngested
-		file.UpdatedAt = s.now().UTC()
-		if err := s.index.Put(ctx, file); err != nil {
-			// One record failing to advance is not fatal: it stays landed and the next run retries.
-			log.Printf("mark file %s ingested: %v", file.ID, err)
+		// AdvanceStatus is conditional, so a file deleted or changed since the snapshot is skipped
+		// rather than resurrected. One record failing is not fatal: it stays landed and the next
+		// run retries.
+		if err := s.index.AdvanceStatus(ctx, file.ID, domain.StatusLanded, domain.StatusIngested); err != nil {
+			log.Printf("advance file %s to ingested: %v", file.ID, err)
 		}
 	}
 	return nil

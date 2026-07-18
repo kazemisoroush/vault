@@ -80,6 +80,14 @@ func (f *fakeIndex) ListByStatus(_ context.Context, status string, limit int32) 
 	return page, nil
 }
 
+func (f *fakeIndex) AdvanceStatus(_ context.Context, id string, from string, to string) error {
+	if file, ok := f.files[id]; ok && file.Status == from {
+		file.Status = to
+		f.files[id] = file
+	}
+	return nil
+}
+
 func (f *fakeIndex) Delete(_ context.Context, id string) error {
 	delete(f.files, id)
 	return nil

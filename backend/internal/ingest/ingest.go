@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -117,22 +116,12 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 	return nil
 }
 
-// kbMetadata is the Knowledge Base metadata sidecar: the attributes the managed data source stamps
-// on every passage it indexes from the file, so a retrieved passage can be tied back to its file.
-type kbMetadata struct {
-	MetadataAttributes map[string]string `json:"metadataAttributes"`
-}
-
 // writeMetadata writes the file's Knowledge Base metadata sidecar next to the stored object, so the
 // data source attaches the file id and name to every passage. Without it a passage cannot be cited.
 func (h *Handler) writeMetadata(ctx context.Context, file domain.File) error {
-	meta := kbMetadata{MetadataAttributes: map[string]string{
-		kb.MetaFileID:   file.ID,
-		kb.MetaFileName: file.Name,
-	}}
-	body, err := json.Marshal(meta)
+	body, err := kb.MetadataSidecar(file.ID, file.Name)
 	if err != nil {
-		return fmt.Errorf("marshal metadata for %q: %w", file.ID, err)
+		return fmt.Errorf("build metadata for %q: %w", file.ID, err)
 	}
 	if err := h.blobs.Put(ctx, blob.MetadataKey(file.ID), "application/json", body); err != nil {
 		return fmt.Errorf("put metadata for %q: %w", file.ID, err)

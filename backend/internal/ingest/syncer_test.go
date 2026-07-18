@@ -26,22 +26,14 @@ func TestSyncAdvancesLandedToIngestedWhenJobCompletes(t *testing.T) {
 	}
 	idx.EXPECT().ListByStatus(gomock.Any(), domain.StatusLanded, gomock.Any()).Return(landed, nil)
 	indexer.EXPECT().Sync(gomock.Any()).Return(true, nil)
-	var advanced []domain.File
-	idx.EXPECT().Put(gomock.Any(), gomock.Any()).Times(2).DoAndReturn(func(_ context.Context, f domain.File) error {
-		advanced = append(advanced, f)
-		return nil
-	})
+	// Each snapshotted file is advanced landed -> ingested with a conditional write.
+	idx.EXPECT().AdvanceStatus(gomock.Any(), "a", domain.StatusLanded, domain.StatusIngested).Return(nil)
+	idx.EXPECT().AdvanceStatus(gomock.Any(), "b", domain.StatusLanded, domain.StatusIngested).Return(nil)
 
 	s := ingest.NewSyncer(indexer, idx)
 
-	// Act
+	// Act & Assert: both files advance; the strict mock fails on any unexpected call.
 	require.NoError(t, s.Sync(context.Background()))
-
-	// Assert: exactly the snapshotted files were advanced to ingested.
-	require.Len(t, advanced, 2)
-	for _, f := range advanced {
-		assert.Equal(t, domain.StatusIngested, f.Status)
-	}
 }
 
 func TestSyncWithNoLandedFilesStartsNoJob(t *testing.T) {

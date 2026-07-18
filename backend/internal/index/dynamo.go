@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -133,6 +134,37 @@ func (d *DynamoIndex) ListByStatus(ctx context.Context, status string, limit int
 		return nil, fmt.Errorf("unmarshal files: %w", err)
 	}
 	return files, nil
+}
+
+// AdvanceStatus moves a file from one status to another with a conditional update, so a file
+// deleted or already advanced since it was listed is left untouched. The condition failing is the
+// expected no-op, not an error: it means the record is gone or already moved on.
+func (d *DynamoIndex) AdvanceStatus(ctx context.Context, id string, from string, to string) error {
+	now, err := attributevalue.Marshal(time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("marshal timestamp: %w", err)
+	}
+
+	_, err = d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:                aws.String(d.table),
+		Key:                      idKey(id),
+		UpdateExpression:         aws.String("SET #status = :to, updatedAt = :now"),
+		ConditionExpression:      aws.String("attribute_exists(id) AND #status = :from"),
+		ExpressionAttributeNames: map[string]string{"#status": "status"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":to":   &types.AttributeValueMemberS{Value: to},
+			":from": &types.AttributeValueMemberS{Value: from},
+			":now":  now,
+		},
+	})
+	if err != nil {
+		var conditionFailed *types.ConditionalCheckFailedException
+		if errors.As(err, &conditionFailed) {
+			return nil
+		}
+		return fmt.Errorf("advance status of %q: %w", id, err)
+	}
+	return nil
 }
 
 // Delete removes one file record by id.

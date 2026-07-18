@@ -68,8 +68,8 @@ def handler(event, context):
 // newKnowledgeBase stands up the managed retrieval foundation: an OpenSearch managed domain, its
 // vector index (created by a custom-resource Lambda, since a managed domain has no native
 // CloudFormation index resource), and a Bedrock Knowledge Base over the files bucket that parses
-// PDFs and image scans with Bedrock Data Automation. It provisions storage and ingestion only;
-// querying the Knowledge Base, where hybrid vector plus BM25 search is applied, is a later change.
+// PDFs and image scans with Bedrock Data Automation. The Knowledge Base serves both the hybrid
+// vector plus BM25 search on query and the ingestion the syncer drives.
 func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) knowledgeBase {
 	region := stack.Region()
 	account := stack.Account()

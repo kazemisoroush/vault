@@ -41,6 +41,20 @@ func (m *MockIndex) EXPECT() *MockIndexMockRecorder {
 	return m.recorder
 }
 
+// AdvanceStatus mocks base method.
+func (m *MockIndex) AdvanceStatus(ctx context.Context, id, from, to string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdvanceStatus", ctx, id, from, to)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AdvanceStatus indicates an expected call of AdvanceStatus.
+func (mr *MockIndexMockRecorder) AdvanceStatus(ctx, id, from, to any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvanceStatus", reflect.TypeOf((*MockIndex)(nil).AdvanceStatus), ctx, id, from, to)
+}
+
 // Delete mocks base method.
 func (m *MockIndex) Delete(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()

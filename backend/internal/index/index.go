@@ -19,6 +19,10 @@ type Index interface {
 	// ListByStatus returns up to limit records in the given lifecycle status, across all owners, so
 	// the Knowledge Base syncer can find the landed files to advance to ingested.
 	ListByStatus(ctx context.Context, status string, limit int32) ([]domain.File, error)
+	// AdvanceStatus moves a file from one lifecycle status to another only if it still exists and is
+	// currently in the from status, so a file deleted or already advanced since it was listed is
+	// left untouched. It is a no-op when that condition does not hold.
+	AdvanceStatus(ctx context.Context, id string, from string, to string) error
 	// Delete removes a record by id without an ownership check.
 	Delete(ctx context.Context, id string) error
 }
