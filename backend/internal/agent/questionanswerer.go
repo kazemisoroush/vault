@@ -36,7 +36,7 @@ type QuestionAnswerer struct {
 	index    index.Index
 }
 
-// NewQuestionAnswerer builds an QuestionAnswerer over the model, the Knowledge Base searcher, and the file index.
+// NewQuestionAnswerer builds a QuestionAnswerer over the model, the Knowledge Base searcher, and the file index.
 func NewQuestionAnswerer(model Converser, s kb.Searcher, idx index.Index) *QuestionAnswerer {
 	return &QuestionAnswerer{model: model, searcher: s, index: idx}
 }
