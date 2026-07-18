@@ -45,7 +45,7 @@ func tools() []llm.Tool {
 }
 
 // executor returns the function that runs whichever tool the model called, always scoped to owner.
-func (a *Agent) executor(ownerID string) llm.ToolExecutor {
+func (a *QuestionAnswerer) executor(ownerID string) llm.ToolExecutor {
 	return func(ctx context.Context, call llm.ToolCall) (string, error) {
 		switch call.Name {
 		case toolSearchByMeaning:
@@ -75,7 +75,7 @@ type searchInput struct {
 // the model to reason over. The managed Knowledge Base is one shared store that carries no owner
 // metadata yet, so retrieval is not owner-scoped on its own; every passage is dropped unless its
 // file belongs to ownerID, keeping another owner's text from ever reaching the model.
-func (a *Agent) runSearch(ctx context.Context, ownerID string, raw json.RawMessage) (string, error) {
+func (a *QuestionAnswerer) runSearch(ctx context.Context, ownerID string, raw json.RawMessage) (string, error) {
 	var in searchInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", fmt.Errorf("decode %s input: %w", toolSearchByMeaning, err)
@@ -111,7 +111,7 @@ type getInput struct {
 
 // runGet reads one file the owner owns. A missing or foreign file returns a not-found result so the
 // model learns the outcome without another owner's file ever leaking.
-func (a *Agent) runGet(ctx context.Context, ownerID string, raw json.RawMessage) (string, error) {
+func (a *QuestionAnswerer) runGet(ctx context.Context, ownerID string, raw json.RawMessage) (string, error) {
 	var in getInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", fmt.Errorf("decode %s input: %w", toolGetFile, err)

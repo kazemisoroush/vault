@@ -57,7 +57,7 @@ func main() {
 	// Retrieval runs against the managed Knowledge Base by hybrid search, for both the agent and the check.
 	searcher := kb.NewBedrockSearcher(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
 
-	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), searcher, idx)
+	answerer := agent.NewQuestionAnswerer(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), searcher, idx)
 
 	// The check pipeline runs as an async self-invocation, so the API reply is immediate and the
 	// pipeline gets the full function timeout. AWS_LAMBDA_FUNCTION_NAME is set by the runtime.

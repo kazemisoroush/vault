@@ -47,7 +47,7 @@ func main() {
 	// Retrieval runs against the managed Knowledge Base by hybrid search, for the agent and the check.
 	searcher := kb.NewBedrockSearcher(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
 
-	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), searcher, idx)
+	answerer := agent.NewQuestionAnswerer(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), searcher, idx)
 
 	// Locally there is no Lambda to self-invoke, so the check pipeline runs in a goroutine.
 	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)

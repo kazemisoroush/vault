@@ -20,7 +20,7 @@ func runCase(t *testing.T, model agent.Converser, c Case) {
 	idx := newFakeIndex()
 	require.NoError(t, seed(idx, searcher, c))
 
-	answerer := agent.NewAgent(model, searcher, idx)
+	answerer := agent.NewQuestionAnswerer(model, searcher, idx)
 	result, err := answerer.Answer(context.Background(), c.Owner, c.Query)
 	require.NoError(t, err)
 

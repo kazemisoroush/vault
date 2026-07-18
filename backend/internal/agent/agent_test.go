@@ -45,11 +45,11 @@ func (f fakeSearcher) Search(_ context.Context, _ string, _ int) ([]kb.Passage, 
 	return f.passages, f.err
 }
 
-func newAgent(t *testing.T, model Converser, s kb.Searcher) (*Agent, *mocks.MockIndex) {
+func newAnswerer(t *testing.T, model Converser, s kb.Searcher) (*QuestionAnswerer, *mocks.MockIndex) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)
-	return NewAgent(model, s, idx), idx
+	return NewQuestionAnswerer(model, s, idx), idx
 }
 
 func TestAnswerRunsSearchAndReturnsCitedFiles(t *testing.T) {
@@ -62,7 +62,7 @@ func TestAnswerRunsSearchAndReturnsCitedFiles(t *testing.T) {
 		{FileID: "a", FileName: "petrol", Text: "Shell fuel receipt"},
 		{FileID: "b", FileName: "ticket", Text: "a flight ticket"},
 	}}
-	a, idx := newAgent(t, model, r)
+	a, idx := newAnswerer(t, model, r)
 	idx.EXPECT().Get(gomock.Any(), "a").Return(domain.File{ID: "a", OwnerID: "alice", Name: "petrol", Key: "files/a"}, nil).AnyTimes()
 	idx.EXPECT().Get(gomock.Any(), "b").Return(domain.File{ID: "b", OwnerID: "alice", Name: "ticket", Key: "files/b"}, nil).AnyTimes()
 
@@ -91,7 +91,7 @@ func TestSearchDropsAForeignOwnerPassage(t *testing.T) {
 		{FileID: "mine", FileName: "mine", Text: "my own deposit note"},
 		{FileID: "theirs", FileName: "theirs", Text: "another owner's deposit note"},
 	}}
-	a, idx := newAgent(t, model, r)
+	a, idx := newAnswerer(t, model, r)
 	idx.EXPECT().Get(gomock.Any(), "mine").Return(domain.File{ID: "mine", OwnerID: "alice"}, nil).AnyTimes()
 	idx.EXPECT().Get(gomock.Any(), "theirs").Return(domain.File{ID: "theirs", OwnerID: "mallory"}, nil).AnyTimes()
 
@@ -111,7 +111,7 @@ func TestAnswerGetFileHidesAForeignOwner(t *testing.T) {
 		calls: []llm.ToolCall{{Name: toolGetFile, Input: []byte(`{"id":"secret"}`)}},
 		final: `{"answer":"I could not find that","fileIds":[]}`,
 	}
-	a, idx := newAgent(t, model, fakeSearcher{})
+	a, idx := newAnswerer(t, model, fakeSearcher{})
 	idx.EXPECT().Get(gomock.Any(), "secret").Return(domain.File{ID: "secret", OwnerID: "mallory"}, nil)
 
 	// Act
@@ -126,7 +126,7 @@ func TestAnswerGetFileHidesAForeignOwner(t *testing.T) {
 func TestAnswerDropsACitedFileTheCallerDoesNotOwn(t *testing.T) {
 	// Arrange: the model cites an id whose record belongs to another owner.
 	model := &scriptedModel{final: `{"answer":"here","fileIds":["foreign"]}`}
-	a, idx := newAgent(t, model, fakeSearcher{})
+	a, idx := newAnswerer(t, model, fakeSearcher{})
 	idx.EXPECT().Get(gomock.Any(), "foreign").Return(domain.File{ID: "foreign", OwnerID: "bob"}, nil)
 
 	// Act
@@ -141,7 +141,7 @@ func TestAnswerDropsACitedFileTheCallerDoesNotOwn(t *testing.T) {
 func TestAnswerPropagatesAToolError(t *testing.T) {
 	// Arrange: retrieval fails, which the executor returns as an error.
 	model := &scriptedModel{calls: []llm.ToolCall{{Name: toolSearchByMeaning, Input: []byte(`{"query":"x"}`)}}}
-	a, _ := newAgent(t, model, fakeSearcher{err: errors.New("bedrock down")})
+	a, _ := newAnswerer(t, model, fakeSearcher{err: errors.New("bedrock down")})
 
 	// Act
 	_, err := a.Answer(context.Background(), "alice", "x")

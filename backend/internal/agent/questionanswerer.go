@@ -28,22 +28,22 @@ type Result struct {
 	Files []domain.File
 }
 
-// Agent answers queries by driving the model over the vault through its tools: hybrid search over
+// QuestionAnswerer answers queries by driving the model over the vault through its tools: hybrid search over
 // the Knowledge Base, and a read of one file's record.
-type Agent struct {
+type QuestionAnswerer struct {
 	model    Converser
 	searcher kb.Searcher
 	index    index.Index
 }
 
-// NewAgent builds an Agent over the model, the Knowledge Base searcher, and the file index.
-func NewAgent(model Converser, s kb.Searcher, idx index.Index) *Agent {
-	return &Agent{model: model, searcher: s, index: idx}
+// NewQuestionAnswerer builds an QuestionAnswerer over the model, the Knowledge Base searcher, and the file index.
+func NewQuestionAnswerer(model Converser, s kb.Searcher, idx index.Index) *QuestionAnswerer {
+	return &QuestionAnswerer{model: model, searcher: s, index: idx}
 }
 
 // Answer lets the model query the owner's vault through the tools and returns the answer with the
 // files it used. Every store call the tools make is scoped to ownerID, which the model cannot set.
-func (a *Agent) Answer(ctx context.Context, ownerID, query string) (Result, error) {
+func (a *QuestionAnswerer) Answer(ctx context.Context, ownerID, query string) (Result, error) {
 	reply, err := a.model.Converse(ctx, llm.Conversation{
 		System:    systemPrompt,
 		Prompt:    query,
@@ -62,7 +62,7 @@ func (a *Agent) Answer(ctx context.Context, ownerID, query string) (Result, erro
 
 // load fetches the owner's records for the ids the model cited, skipping any it does not own or
 // that no longer exist, so a stale citation never leaks another owner's file.
-func (a *Agent) load(ctx context.Context, ownerID string, ids []string) []domain.File {
+func (a *QuestionAnswerer) load(ctx context.Context, ownerID string, ids []string) []domain.File {
 	files := make([]domain.File, 0, len(ids))
 	for _, id := range ids {
 		file, err := a.index.Get(ctx, id)
