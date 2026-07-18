@@ -23,6 +23,8 @@ type Config struct {
 	VectorIndex   string
 	// KnowledgeBaseID is the managed Bedrock Knowledge Base the searcher queries by hybrid search.
 	KnowledgeBaseID string
+	// KnowledgeBaseDataSourceID is the Knowledge Base data source the syncer runs ingestion jobs on.
+	KnowledgeBaseDataSourceID string
 	// FunctionName is this Lambda's own name, set by the Lambda runtime. The check pipeline
 	// self-invokes it to run asynchronously; empty outside Lambda.
 	FunctionName string
@@ -31,22 +33,23 @@ type Config struct {
 // Load reads the configuration from environment variables.
 func Load() Config {
 	return Config{
-		Table:           os.Getenv("VAULT_TABLE"),
-		CallsTable:      os.Getenv("VAULT_CALLS_TABLE"),
-		ChecksTable:     os.Getenv("VAULT_CHECKS_TABLE"),
-		Bucket:          os.Getenv("VAULT_BUCKET"),
-		JWTIssuer:       os.Getenv("VAULT_JWT_ISSUER"),
-		JWTClientID:     os.Getenv("VAULT_JWT_CLIENT_ID"),
-		Addr:            os.Getenv("VAULT_ADDR"),
-		AuthDisabled:    os.Getenv("VAULT_AUTH_DISABLED") == "true",
-		BedrockRegion:   os.Getenv("VAULT_BEDROCK_REGION"),
-		ExtractModel:    os.Getenv("VAULT_EXTRACT_MODEL"),
-		RerankModel:     os.Getenv("VAULT_RERANK_MODEL"),
-		EmbedModel:      os.Getenv("VAULT_EMBED_MODEL"),
-		VectorBucket:    os.Getenv("VAULT_VECTOR_BUCKET"),
-		VectorIndex:     os.Getenv("VAULT_VECTOR_INDEX"),
-		KnowledgeBaseID: os.Getenv("VAULT_KNOWLEDGE_BASE_ID"),
-		FunctionName:    os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),
+		Table:                     os.Getenv("VAULT_TABLE"),
+		CallsTable:                os.Getenv("VAULT_CALLS_TABLE"),
+		ChecksTable:               os.Getenv("VAULT_CHECKS_TABLE"),
+		Bucket:                    os.Getenv("VAULT_BUCKET"),
+		JWTIssuer:                 os.Getenv("VAULT_JWT_ISSUER"),
+		JWTClientID:               os.Getenv("VAULT_JWT_CLIENT_ID"),
+		Addr:                      os.Getenv("VAULT_ADDR"),
+		AuthDisabled:              os.Getenv("VAULT_AUTH_DISABLED") == "true",
+		BedrockRegion:             os.Getenv("VAULT_BEDROCK_REGION"),
+		ExtractModel:              os.Getenv("VAULT_EXTRACT_MODEL"),
+		RerankModel:               os.Getenv("VAULT_RERANK_MODEL"),
+		EmbedModel:                os.Getenv("VAULT_EMBED_MODEL"),
+		VectorBucket:              os.Getenv("VAULT_VECTOR_BUCKET"),
+		VectorIndex:               os.Getenv("VAULT_VECTOR_INDEX"),
+		KnowledgeBaseID:           os.Getenv("VAULT_KNOWLEDGE_BASE_ID"),
+		KnowledgeBaseDataSourceID: os.Getenv("VAULT_KNOWLEDGE_BASE_DATA_SOURCE_ID"),
+		FunctionName:              os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),
 	}
 }
 

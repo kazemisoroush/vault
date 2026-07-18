@@ -70,6 +70,16 @@ func (f *fakeIndex) List(_ context.Context, ownerID string, limit int32, cursor 
 	return page, next, nil
 }
 
+func (f *fakeIndex) ListByStatus(_ context.Context, status string, limit int32) ([]domain.File, error) {
+	page := make([]domain.File, 0, limit)
+	for _, id := range f.order {
+		if file := f.files[id]; file.Status == status && int32(len(page)) < limit {
+			page = append(page, file)
+		}
+	}
+	return page, nil
+}
+
 func (f *fakeIndex) Delete(_ context.Context, id string) error {
 	delete(f.files, id)
 	return nil

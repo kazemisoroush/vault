@@ -33,7 +33,7 @@ func TestHandleRoutesS3ToIngester(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{}, nil
 	}
-	adapter := router.NewEventRouter(proxy, ingester, stubVerifier{})
+	adapter := router.NewEventRouter(proxy, ingester, stubSyncer{}, stubVerifier{})
 
 	// Act
 	_, err := adapter.Route(context.Background(), json.RawMessage(s3Payload))
@@ -53,7 +53,7 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 	}
-	adapter := router.NewEventRouter(proxy, ingester, stubVerifier{})
+	adapter := router.NewEventRouter(proxy, ingester, stubSyncer{}, stubVerifier{})
 
 	// Act
 	resp, err := adapter.Route(context.Background(), json.RawMessage(apiPayload))
@@ -62,6 +62,37 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, proxyCalled, "API event must hit the HTTP proxy")
 	assert.Equal(t, 200, resp.(events.APIGatewayV2HTTPResponse).StatusCode)
+}
+
+func TestHandleRoutesScheduledEventToSyncer(t *testing.T) {
+	// Arrange
+	ctrl := gomock.NewController(t)
+	ingester := mocks.NewMockIngester(ctrl)
+	synced := false
+	proxy := func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+		t.Fatalf("scheduled event must not hit the HTTP proxy")
+		return events.APIGatewayV2HTTPResponse{}, nil
+	}
+	adapter := router.NewEventRouter(proxy, ingester, stubSyncer{synced: &synced}, stubVerifier{})
+
+	// Act
+	_, err := adapter.Route(context.Background(), json.RawMessage(`{"source":"aws.events","detail-type":"Scheduled Event"}`))
+
+	// Assert: the Knowledge Base sync ran and no other handler was touched.
+	require.NoError(t, err)
+	assert.True(t, synced, "a scheduled event must run the Knowledge Base sync")
+}
+
+// stubSyncer satisfies router.KBSyncer, recording whether it was invoked.
+type stubSyncer struct {
+	synced *bool
+}
+
+func (s stubSyncer) Sync(context.Context) error {
+	if s.synced != nil {
+		*s.synced = true
+	}
+	return nil
 }
 
 // stubVerifier satisfies router.CheckVerifier for tests that never route a check task.

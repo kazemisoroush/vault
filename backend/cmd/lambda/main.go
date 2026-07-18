@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockagent"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	lambdasvc "github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -67,7 +68,9 @@ func main() {
 	proxy := httpadapter.NewV2(apiHandler).ProxyWithContext
 
 	ingester := ingest.NewHandler(idx, blobs)
+	indexer := kb.NewBedrockIndexer(bedrockagent.NewFromConfig(awsCfg), cfg.KnowledgeBaseID, cfg.KnowledgeBaseDataSourceID)
+	syncer := ingest.NewSyncer(indexer, idx)
 
-	adapter := router.NewEventRouter(proxy, ingester, verifier)
+	adapter := router.NewEventRouter(proxy, ingester, syncer, verifier)
 	lambda.Start(adapter.Route)
 }

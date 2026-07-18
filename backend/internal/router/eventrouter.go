@@ -19,17 +19,24 @@ type CheckVerifier interface {
 	Verify(ctx context.Context, checkID string, ownerID string) error
 }
 
-// EventRouter routes an S3 event to ingestion, a check task to the check verifier, and every other
-// event to the HTTP proxy.
+// KBSyncer advances landed files into the Knowledge Base on a schedule.
+type KBSyncer interface {
+	Sync(ctx context.Context) error
+}
+
+// EventRouter routes an S3 event to ingestion, a scheduled event to the Knowledge Base syncer, a
+// check task to the check verifier, and every other event to the HTTP proxy.
 type EventRouter struct {
 	proxy    Proxy
 	ingester Ingester
+	syncer   KBSyncer
 	checks   CheckVerifier
 }
 
-// NewEventRouter builds an EventRouter over the HTTP proxy, the ingester, and the check verifier.
-func NewEventRouter(proxy Proxy, ingester Ingester, checkVerifier CheckVerifier) *EventRouter {
-	return &EventRouter{proxy: proxy, ingester: ingester, checks: checkVerifier}
+// NewEventRouter builds an EventRouter over the HTTP proxy, the ingester, the Knowledge Base syncer,
+// and the check verifier.
+func NewEventRouter(proxy Proxy, ingester Ingester, syncer KBSyncer, checkVerifier CheckVerifier) *EventRouter {
+	return &EventRouter{proxy: proxy, ingester: ingester, syncer: syncer, checks: checkVerifier}
 }
 
 // Route sends one raw Lambda event to the handler for its source.
@@ -41,6 +48,13 @@ func (r *EventRouter) Route(ctx context.Context, raw json.RawMessage) (any, erro
 		}
 		if err := r.ingester.Handle(ctx, event); err != nil {
 			return nil, fmt.Errorf("ingest S3 event: %w", err)
+		}
+		return nil, nil
+	}
+
+	if isScheduledEvent(raw) {
+		if err := r.syncer.Sync(ctx); err != nil {
+			return nil, fmt.Errorf("knowledge base sync: %w", err)
 		}
 		return nil, nil
 	}
@@ -80,6 +94,21 @@ func isS3Event(raw json.RawMessage) bool {
 		return false
 	}
 	return len(probe.Records) > 0 && probe.Records[0].EventSource == "aws:s3"
+}
+
+// scheduledEventProbe sniffs the source of an EventBridge event.
+type scheduledEventProbe struct {
+	Source string `json:"source"`
+}
+
+// isScheduledEvent reports whether the raw event is the EventBridge schedule that drives the
+// Knowledge Base sync. EventBridge stamps scheduled rules with the aws.events source.
+func isScheduledEvent(raw json.RawMessage) bool {
+	var probe scheduledEventProbe
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return false
+	}
+	return probe.Source == "aws.events"
 }
 
 // checkTask sniffs a raw event for a check task payload.

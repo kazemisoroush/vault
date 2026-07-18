@@ -24,6 +24,7 @@ func TestLoadReadsEnvironment(t *testing.T) {
 	t.Setenv("VAULT_VECTOR_BUCKET", "vault-vectors")
 	t.Setenv("VAULT_VECTOR_INDEX", "files")
 	t.Setenv("VAULT_KNOWLEDGE_BASE_ID", "kb-abc123")
+	t.Setenv("VAULT_KNOWLEDGE_BASE_DATA_SOURCE_ID", "ds-xyz789")
 	t.Setenv("AWS_LAMBDA_FUNCTION_NAME", "vault-fn")
 
 	// Act
@@ -45,6 +46,7 @@ func TestLoadReadsEnvironment(t *testing.T) {
 	assert.Equal(t, "vault-vectors", cfg.VectorBucket)
 	assert.Equal(t, "files", cfg.VectorIndex)
 	assert.Equal(t, "kb-abc123", cfg.KnowledgeBaseID)
+	assert.Equal(t, "ds-xyz789", cfg.KnowledgeBaseDataSourceID)
 	assert.Equal(t, "vault-fn", cfg.FunctionName)
 }
 
