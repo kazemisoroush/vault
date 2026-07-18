@@ -29,18 +29,18 @@ type Config struct {
 // Load reads the configuration from environment variables.
 func Load() Config {
 	return Config{
-		Table:                     os.Getenv("VAULT_TABLE"),
-		CallsTable:                os.Getenv("VAULT_CALLS_TABLE"),
-		ChecksTable:               os.Getenv("VAULT_CHECKS_TABLE"),
-		Bucket:                    os.Getenv("VAULT_BUCKET"),
-		JWTIssuer:                 os.Getenv("VAULT_JWT_ISSUER"),
-		JWTClientID:               os.Getenv("VAULT_JWT_CLIENT_ID"),
-		Addr:                      os.Getenv("VAULT_ADDR"),
-		AuthDisabled:              os.Getenv("VAULT_AUTH_DISABLED") == "true",
-		BedrockRegion:             os.Getenv("VAULT_BEDROCK_REGION"),
-		RerankModel:               os.Getenv("VAULT_RERANK_MODEL"),
-		KnowledgeBaseID:           os.Getenv("VAULT_KNOWLEDGE_BASE_ID"),
-		KnowledgeBaseDataSourceID: os.Getenv("VAULT_KNOWLEDGE_BASE_DATA_SOURCE_ID"),
+		Table:                     os.Getenv("TABLE"),
+		CallsTable:                os.Getenv("CALLS_TABLE"),
+		ChecksTable:               os.Getenv("CHECKS_TABLE"),
+		Bucket:                    os.Getenv("BUCKET"),
+		JWTIssuer:                 os.Getenv("JWT_ISSUER"),
+		JWTClientID:               os.Getenv("JWT_CLIENT_ID"),
+		Addr:                      os.Getenv("ADDR"),
+		AuthDisabled:              os.Getenv("AUTH_DISABLED") == "true",
+		BedrockRegion:             os.Getenv("BEDROCK_REGION"),
+		RerankModel:               os.Getenv("RERANK_MODEL"),
+		KnowledgeBaseID:           os.Getenv("KNOWLEDGE_BASE_ID"),
+		KnowledgeBaseDataSourceID: os.Getenv("KNOWLEDGE_BASE_DATA_SOURCE_ID"),
 		FunctionName:              os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),
 	}
 }

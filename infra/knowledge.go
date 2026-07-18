@@ -70,7 +70,7 @@ def handler(event, context):
 // CloudFormation index resource), and a Bedrock Knowledge Base over the files bucket that parses
 // PDFs and image scans with Bedrock Data Automation. It provisions storage and ingestion only;
 // querying the Knowledge Base, where hybrid vector plus BM25 search is applied, is a later change.
-func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKnowledgeBase {
+func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) knowledgeBase {
 	region := stack.Region()
 	account := stack.Account()
 
@@ -220,14 +220,16 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 	kb.Node().AddDependency(index)
 
 	// The S3 data source, parsed by Bedrock Data Automation so PDFs and image scans yield text and
-	// entities (the passport is an image; without this it would carry no searchable text).
-	awsbedrock.NewCfnDataSource(stack, jsii.String("KbDataSource"), &awsbedrock.CfnDataSourceProps{
+	// entities (the passport is an image; without this it would carry no searchable text). Only the
+	// files/ prefix is ingested, so staged uploads and metadata elsewhere never reach the index.
+	dataSource := awsbedrock.NewCfnDataSource(stack, jsii.String("KbDataSource"), &awsbedrock.CfnDataSourceProps{
 		KnowledgeBaseId: kb.AttrKnowledgeBaseId(),
 		Name:            jsii.String("VaultFiles"),
 		DataSourceConfiguration: &awsbedrock.CfnDataSource_DataSourceConfigurationProperty{
 			Type: jsii.String("S3"),
 			S3Configuration: &awsbedrock.CfnDataSource_S3DataSourceConfigurationProperty{
-				BucketArn: bucket.BucketArn(),
+				BucketArn:         bucket.BucketArn(),
+				InclusionPrefixes: jsii.Strings("files/"),
 			},
 		},
 		VectorIngestionConfiguration: &awsbedrock.CfnDataSource_VectorIngestionConfigurationProperty{
@@ -243,5 +245,11 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) awsbedrock.CfnKno
 	awscdk.NewCfnOutput(stack, jsii.String("KnowledgeBaseId"), &awscdk.CfnOutputProps{Value: kb.AttrKnowledgeBaseId()})
 	awscdk.NewCfnOutput(stack, jsii.String("KbDomainEndpoint"), &awscdk.CfnOutputProps{Value: domain.DomainEndpoint()})
 
-	return kb
+	return knowledgeBase{id: kb.AttrKnowledgeBaseId(), dataSourceID: dataSource.AttrDataSourceId()}
+}
+
+// knowledgeBase carries the ids the Lambda needs to query and sync the managed Knowledge Base.
+type knowledgeBase struct {
+	id           *string
+	dataSourceID *string
 }

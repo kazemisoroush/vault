@@ -9,18 +9,18 @@ import (
 // TestLoadReadsEnvironment checks every field is read from its variable.
 func TestLoadReadsEnvironment(t *testing.T) {
 	// Arrange
-	t.Setenv("VAULT_TABLE", "table-x")
-	t.Setenv("VAULT_CALLS_TABLE", "calls-x")
-	t.Setenv("VAULT_CHECKS_TABLE", "checks-x")
-	t.Setenv("VAULT_BUCKET", "bucket-y")
-	t.Setenv("VAULT_JWT_ISSUER", "https://issuer.example")
-	t.Setenv("VAULT_JWT_CLIENT_ID", "client-123")
-	t.Setenv("VAULT_ADDR", ":9090")
-	t.Setenv("VAULT_AUTH_DISABLED", "true")
-	t.Setenv("VAULT_BEDROCK_REGION", "us-east-1")
-	t.Setenv("VAULT_RERANK_MODEL", "rerank-model")
-	t.Setenv("VAULT_KNOWLEDGE_BASE_ID", "kb-abc123")
-	t.Setenv("VAULT_KNOWLEDGE_BASE_DATA_SOURCE_ID", "ds-xyz789")
+	t.Setenv("TABLE", "table-x")
+	t.Setenv("CALLS_TABLE", "calls-x")
+	t.Setenv("CHECKS_TABLE", "checks-x")
+	t.Setenv("BUCKET", "bucket-y")
+	t.Setenv("JWT_ISSUER", "https://issuer.example")
+	t.Setenv("JWT_CLIENT_ID", "client-123")
+	t.Setenv("ADDR", ":9090")
+	t.Setenv("AUTH_DISABLED", "true")
+	t.Setenv("BEDROCK_REGION", "us-east-1")
+	t.Setenv("RERANK_MODEL", "rerank-model")
+	t.Setenv("KNOWLEDGE_BASE_ID", "kb-abc123")
+	t.Setenv("KNOWLEDGE_BASE_DATA_SOURCE_ID", "ds-xyz789")
 	t.Setenv("AWS_LAMBDA_FUNCTION_NAME", "vault-fn")
 
 	// Act
@@ -46,7 +46,7 @@ func TestLoadReadsEnvironment(t *testing.T) {
 // stray value never silently turns auth off.
 func TestAuthDisabledIsFalseUnlessExactlyTrue(t *testing.T) {
 	// Arrange: a truthy-looking but non-exact value.
-	t.Setenv("VAULT_AUTH_DISABLED", "TRUE")
+	t.Setenv("AUTH_DISABLED", "TRUE")
 
 	// Act & Assert: only the exact string "true" disables auth.
 	assert.False(t, Load().AuthDisabled)
@@ -55,7 +55,7 @@ func TestAuthDisabledIsFalseUnlessExactlyTrue(t *testing.T) {
 // TestServerAddrFallsBackToDefault checks the local server port default.
 func TestServerAddrFallsBackToDefault(t *testing.T) {
 	// Arrange
-	t.Setenv("VAULT_ADDR", "")
+	t.Setenv("ADDR", "")
 
 	// Act
 	cfg := Load()
@@ -67,7 +67,7 @@ func TestServerAddrFallsBackToDefault(t *testing.T) {
 // TestServerAddrUsesConfiguredValue checks a set address wins over the default.
 func TestServerAddrUsesConfiguredValue(t *testing.T) {
 	// Arrange
-	t.Setenv("VAULT_ADDR", ":9090")
+	t.Setenv("ADDR", ":9090")
 
 	// Act
 	cfg := Load()
@@ -79,13 +79,13 @@ func TestServerAddrUsesConfiguredValue(t *testing.T) {
 // TestAuthDisabledReadsOptOutFlag checks the explicit auth opt-out.
 func TestAuthDisabledReadsOptOutFlag(t *testing.T) {
 	// Arrange
-	t.Setenv("VAULT_AUTH_DISABLED", "true")
+	t.Setenv("AUTH_DISABLED", "true")
 
 	// Act & Assert
 	assert.True(t, Load().AuthDisabled)
 
 	// Arrange
-	t.Setenv("VAULT_AUTH_DISABLED", "")
+	t.Setenv("AUTH_DISABLED", "")
 
 	// Act & Assert
 	assert.False(t, Load().AuthDisabled)

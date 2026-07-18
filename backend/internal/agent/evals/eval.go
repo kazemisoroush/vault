@@ -22,10 +22,10 @@ const (
 	// evalModelOp tags the eval's model calls on the trace.
 	evalModelOp = "eval"
 	// envEvalBedrock gates the Bedrock eval; it runs only when this is set.
-	envEvalBedrock = "VAULT_EVAL_BEDROCK"
+	envEvalBedrock = "EVAL_BEDROCK"
 	// envEvalRegion and envEvalModel override the Bedrock region and model.
-	envEvalRegion = "VAULT_BEDROCK_REGION"
-	envEvalModel  = "VAULT_EVAL_MODEL"
+	envEvalRegion = "BEDROCK_REGION"
+	envEvalModel  = "EVAL_MODEL"
 	// defaultEvalRegion and defaultEvalModel are used when the overrides are unset.
 	defaultEvalRegion = "us-east-1"
 	defaultEvalModel  = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
