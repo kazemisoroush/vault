@@ -16,6 +16,12 @@ func Key(id string) string {
 	return keyPrefix + id
 }
 
+// MetadataKey returns the Knowledge Base metadata sidecar key for a file, which the managed data
+// source reads to attach the file's id and name to every passage it indexes from the object.
+func MetadataKey(id string) string {
+	return Key(id) + ".metadata.json"
+}
+
 // IDFromKey returns the file id embedded in a content-addressed object key.
 func IDFromKey(key string) string {
 	return strings.TrimPrefix(key, keyPrefix)

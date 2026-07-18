@@ -1,16 +1,17 @@
-// Package ingest fills a dropped file's metadata from an S3 event.
+// Package ingest settles a dropped file from an S3 event: it stores the file under its content
+// hash, writes the Knowledge Base metadata sidecar, and records it as landed for the Knowledge
+// Base to index.
 package ingest
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"maps"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -18,26 +19,21 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/archive"
 	"github.com/kazemisoroush/vault/backend/internal/blob"
 	"github.com/kazemisoroush/vault/backend/internal/domain"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
-	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
-	"github.com/kazemisoroush/vault/backend/internal/vectors"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 )
 
-// Handler fills a file's metadata after it lands in S3.
+// Handler settles a file after it lands in S3.
 type Handler struct {
-	index     index.Index
-	blobs     blob.Store
-	extractor extract.Extractor
-	embedder  embed.Embedder
-	vectors   vectors.Store
-	unpacker  archive.Unpacker
-	now       func() time.Time
+	index    index.Index
+	blobs    blob.Store
+	unpacker archive.Unpacker
+	now      func() time.Time
 }
 
 // NewHandler builds an ingest Handler with a real clock and the default zip unpacker.
-func NewHandler(idx index.Index, blobs blob.Store, extractor extract.Extractor, embedder embed.Embedder, store vectors.Store) *Handler {
-	return &Handler{index: idx, blobs: blobs, extractor: extractor, embedder: embedder, vectors: store, unpacker: archive.Zip{}, now: time.Now}
+func NewHandler(idx index.Index, blobs blob.Store) *Handler {
+	return &Handler{index: idx, blobs: blobs, unpacker: archive.Zip{}, now: time.Now}
 }
 
 // Handle processes every object-created record in an S3 event.
@@ -69,9 +65,10 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 		return fmt.Errorf("get pending %q: %w", uploadID, err)
 	}
 
-	// A record already settled to a terminal state (for example a failed archive whose staging
-	// object was removed) is a no-op on redelivery, rather than erroring on the missing object.
-	if pending.Status == domain.StatusReady || pending.Status == domain.StatusFailed {
+	// A record already settled to a terminal failed state (for example a failed archive whose
+	// staging object was removed) is a no-op on redelivery, rather than erroring on the missing
+	// object.
+	if pending.Status == domain.StatusFailed {
 		return nil
 	}
 
@@ -107,43 +104,40 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 		return fmt.Errorf("copy to %q: %w", file.Key, err)
 	}
 
-	extraction, err := h.extractor.Extract(ctx, content, contentType)
-	if err != nil {
-		if errors.Is(err, extract.ErrRetryable) {
-			// Extraction is throttled or briefly unavailable. Leave the pending record and
-			// staging object untouched and fail the invocation, so the S3 event is redriven
-			// later instead of losing the file to a terminal failed state.
-			log.Printf("extraction throttled for %s, will retry: %v", hash, err)
-			return fmt.Errorf("extract %s: %w", hash, err)
-		}
-		log.Printf("extraction failed for %s: %v", hash, err)
-		if _, err := h.save(ctx, file, domain.StatusFailed, nil); err != nil {
-			return fmt.Errorf("record failed extraction for %q: %w", hash, err)
-		}
-		h.cleanup(ctx, uploadID, stagingKey)
-		return nil
+	// The Knowledge Base parses the stored object itself, so the only thing ingestion writes
+	// besides the record is the metadata sidecar that ties indexed passages back to this file.
+	if err := h.writeMetadata(ctx, file); err != nil {
+		return fmt.Errorf("write metadata for %q: %w", hash, err)
 	}
 
-	h.saveText(ctx, file.ID, extraction.Text)
-
-	saved, err := h.save(ctx, file, domain.StatusReady, extraction.Meta)
-	if err != nil {
+	if _, err := h.save(ctx, file, domain.StatusLanded); err != nil {
 		return fmt.Errorf("settle %q: %w", hash, err)
 	}
-	h.embed(ctx, saved)
 	h.cleanup(ctx, uploadID, stagingKey)
 	return nil
 }
 
-// saveText stores the file's canonical text, the record later checks verify quoted spans against.
-// A failure is logged, not fatal: the file record still lands, and a re-drop rewrites the text.
-func (h *Handler) saveText(ctx context.Context, id string, text string) {
-	if strings.TrimSpace(text) == "" {
-		return
+// kbMetadata is the Knowledge Base metadata sidecar: the attributes the managed data source stamps
+// on every passage it indexes from the file, so a retrieved passage can be tied back to its file.
+type kbMetadata struct {
+	MetadataAttributes map[string]string `json:"metadataAttributes"`
+}
+
+// writeMetadata writes the file's Knowledge Base metadata sidecar next to the stored object, so the
+// data source attaches the file id and name to every passage. Without it a passage cannot be cited.
+func (h *Handler) writeMetadata(ctx context.Context, file domain.File) error {
+	meta := kbMetadata{MetadataAttributes: map[string]string{
+		kb.MetaFileID:   file.ID,
+		kb.MetaFileName: file.Name,
+	}}
+	body, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("marshal metadata for %q: %w", file.ID, err)
 	}
-	if err := h.blobs.Put(ctx, blob.TextKey(id), "text/plain; charset=utf-8", []byte(text)); err != nil {
-		log.Printf("store text for %s: %v", id, err)
+	if err := h.blobs.Put(ctx, blob.MetadataKey(file.ID), "application/json", body); err != nil {
+		return fmt.Errorf("put metadata for %q: %w", file.ID, err)
 	}
+	return nil
 }
 
 // cleanup removes the settled file's staging record and object, logging failures rather than failing.
@@ -162,25 +156,8 @@ func hashHex(content []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// embed stores the vector for a ready file so it can be found by meaning. A failure here is
-// logged, not fatal: the record is already saved and can be re-embedded later.
-func (h *Handler) embed(ctx context.Context, file domain.File) {
-	vector, err := h.embedder.Embed(ctx, file.SearchText())
-	if err != nil {
-		log.Printf("embed %s: %v", file.ID, err)
-		return
-	}
-	if err := h.vectors.Put(ctx, file.ID, file.OwnerID, vector); err != nil {
-		log.Printf("store vector for %s: %v", file.ID, err)
-	}
-}
-
-// save merges any extracted metadata, sets the status, persists the record, and returns it.
-func (h *Handler) save(ctx context.Context, file domain.File, status string, meta map[string]string) (domain.File, error) {
-	if meta != nil && file.Meta == nil {
-		file.Meta = map[string]string{}
-	}
-	maps.Copy(file.Meta, meta)
+// save sets the status, stamps the record, persists it, and returns it.
+func (h *Handler) save(ctx context.Context, file domain.File, status string) (domain.File, error) {
 	file.Status = status
 	file.UpdatedAt = h.now().UTC()
 

@@ -20,8 +20,6 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/calls"
 	"github.com/kazemisoroush/vault/backend/internal/checks"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
-	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
 	"github.com/kazemisoroush/vault/backend/internal/kb"
@@ -45,10 +43,6 @@ func main() {
 	blobs := blob.NewS3Store(s3.NewFromConfig(awsCfg), cfg.Bucket)
 	recorder := calls.NewDynamoCalls(dynamoClient, cfg.CallsTable)
 
-	embedder, err := embed.NewTitanEmbedder(ctx, cfg.BedrockRegion, cfg.EmbedModel, recorder)
-	if err != nil {
-		log.Fatalf("configure embedder: %v", err)
-	}
 	vectorStore, err := vectors.NewS3Vectors(ctx, cfg.BedrockRegion, cfg.VectorBucket, cfg.VectorIndex)
 	if err != nil {
 		log.Fatalf("configure vector store: %v", err)
@@ -72,11 +66,7 @@ func main() {
 	}
 	proxy := httpadapter.NewV2(apiHandler).ProxyWithContext
 
-	extractor, err := extract.NewClaudeExtractor(ctx, cfg.BedrockRegion, cfg.ExtractModel, recorder)
-	if err != nil {
-		log.Fatalf("configure extractor: %v", err)
-	}
-	ingester := ingest.NewHandler(idx, blobs, extractor, embedder, vectorStore)
+	ingester := ingest.NewHandler(idx, blobs)
 
 	adapter := router.NewEventRouter(proxy, ingester, verifier)
 	lambda.Start(adapter.Route)

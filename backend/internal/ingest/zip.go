@@ -83,7 +83,7 @@ func (h *Handler) stageChild(ctx context.Context, ownerID string, zipHash string
 // oversized, corrupt, or empty archive has a terminal state rather than sitting pending. The record
 // is kept and settled to failed, which handleKey treats as a no-op on redelivery.
 func (h *Handler) markArchiveFailed(ctx context.Context, archiveFile domain.File, stagingKey string) error {
-	if _, err := h.save(ctx, archiveFile, domain.StatusFailed, nil); err != nil {
+	if _, err := h.save(ctx, archiveFile, domain.StatusFailed); err != nil {
 		return fmt.Errorf("record archive %q as failed: %w", archiveFile.ID, err)
 	}
 	if err := h.blobs.Delete(ctx, stagingKey); err != nil {
