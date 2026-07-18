@@ -45,7 +45,7 @@ func (f fakeSearcher) Search(_ context.Context, _ string, _ int) ([]kb.Passage, 
 	return f.passages, f.err
 }
 
-func newAgent(t *testing.T, model Converser, s kb.PassageSearcher) (*Agent, *mocks.MockIndex) {
+func newAgent(t *testing.T, model Converser, s kb.Searcher) (*Agent, *mocks.MockIndex) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)

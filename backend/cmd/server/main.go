@@ -45,7 +45,7 @@ func main() {
 	}
 
 	// Retrieval runs against the managed Knowledge Base by hybrid search, for the agent and the check.
-	searcher := kb.NewSearcher(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
+	searcher := kb.NewBedrockSearcher(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
 
 	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), searcher, idx)
 

@@ -19,21 +19,21 @@ const (
 	MetaFileName = "fileName"
 )
 
-// client is the slice of the Bedrock agent-runtime API the Searcher uses, kept small to fake in tests.
+// client is the slice of the Bedrock agent-runtime API the BedrockSearcher uses, kept small to fake in tests.
 type client interface {
 	Retrieve(ctx context.Context, in *bedrockagentruntime.RetrieveInput, optFns ...func(*bedrockagentruntime.Options)) (*bedrockagentruntime.RetrieveOutput, error)
 }
 
-// Searcher finds passages in the Knowledge Base by hybrid search, combining vector similarity with
+// BedrockSearcher finds passages in the Knowledge Base by hybrid search, combining vector similarity with
 // keyword (BM25) scoring, so an exact token such as a passport number ranks as well as a paraphrase.
-type Searcher struct {
+type BedrockSearcher struct {
 	client client
 	kbID   string
 }
 
-// NewSearcher builds a Searcher over a Knowledge Base id.
-func NewSearcher(client client, kbID string) *Searcher {
-	return &Searcher{client: client, kbID: kbID}
+// NewBedrockSearcher builds a BedrockSearcher over a Knowledge Base id.
+func NewBedrockSearcher(client client, kbID string) *BedrockSearcher {
+	return &BedrockSearcher{client: client, kbID: kbID}
 }
 
 // Passage is one retrieved chunk: its text, the file it came from (from the document metadata the
@@ -46,7 +46,7 @@ type Passage struct {
 }
 
 // Search returns the passages most relevant to the query by hybrid search, at most limit of them.
-func (s *Searcher) Search(ctx context.Context, query string, limit int) ([]Passage, error) {
+func (s *BedrockSearcher) Search(ctx context.Context, query string, limit int) ([]Passage, error) {
 	out, err := s.client.Retrieve(ctx, &bedrockagentruntime.RetrieveInput{
 		KnowledgeBaseId: aws.String(s.kbID),
 		RetrievalQuery:  &types.KnowledgeBaseQuery{Text: aws.String(query)},

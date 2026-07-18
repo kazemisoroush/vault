@@ -40,7 +40,7 @@ const maxStoredRefs = 5
 // each claim, and let the gate decide the verdict. The model proposes; the gate disposes.
 type Verifier struct {
 	store    Store
-	searcher kb.PassageSearcher
+	searcher kb.Searcher
 	files    fileIndex
 	model    Converser
 	now      func() time.Time
@@ -48,7 +48,7 @@ type Verifier struct {
 
 // NewVerifier builds a Verifier over the check store, the Knowledge Base searcher, the file index
 // that scopes retrieved candidates to their owner, and the model.
-func NewVerifier(store Store, s kb.PassageSearcher, files fileIndex, model Converser) *Verifier {
+func NewVerifier(store Store, s kb.Searcher, files fileIndex, model Converser) *Verifier {
 	return &Verifier{store: store, searcher: s, files: files, model: model, now: time.Now}
 }
 

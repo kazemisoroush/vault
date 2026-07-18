@@ -32,12 +32,12 @@ type Result struct {
 // the Knowledge Base, and a read of one file's record.
 type Agent struct {
 	model    Converser
-	searcher kb.PassageSearcher
+	searcher kb.Searcher
 	index    index.Index
 }
 
 // NewAgent builds an Agent over the model, the Knowledge Base searcher, and the file index.
-func NewAgent(model Converser, s kb.PassageSearcher, idx index.Index) *Agent {
+func NewAgent(model Converser, s kb.Searcher, idx index.Index) *Agent {
 	return &Agent{model: model, searcher: s, index: idx}
 }
 
