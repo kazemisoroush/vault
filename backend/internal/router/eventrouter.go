@@ -1,5 +1,5 @@
-// Package transport adapts the Lambda's triggers to the right handler.
-package transport
+// Package router sends each of the Lambda's triggers to the right handler.
+package router
 
 import (
 	"context"
@@ -19,34 +19,34 @@ type CheckVerifier interface {
 	Verify(ctx context.Context, checkID string, ownerID string) error
 }
 
-// Transport routes an S3 event to ingestion, a check task to the check verifier, and every other
+// EventRouter routes an S3 event to ingestion, a check task to the check verifier, and every other
 // event to the HTTP proxy.
-type Transport struct {
+type EventRouter struct {
 	proxy    Proxy
 	ingester Ingester
 	checks   CheckVerifier
 }
 
-// NewTransport builds a Transport over the HTTP proxy, the ingester, and the check verifier.
-func NewTransport(proxy Proxy, ingester Ingester, checkVerifier CheckVerifier) *Transport {
-	return &Transport{proxy: proxy, ingester: ingester, checks: checkVerifier}
+// NewEventRouter builds an EventRouter over the HTTP proxy, the ingester, and the check verifier.
+func NewEventRouter(proxy Proxy, ingester Ingester, checkVerifier CheckVerifier) *EventRouter {
+	return &EventRouter{proxy: proxy, ingester: ingester, checks: checkVerifier}
 }
 
-// Handle routes one raw Lambda event by its source.
-func (t *Transport) Handle(ctx context.Context, raw json.RawMessage) (any, error) {
+// Route sends one raw Lambda event to the handler for its source.
+func (r *EventRouter) Route(ctx context.Context, raw json.RawMessage) (any, error) {
 	if isS3Event(raw) {
 		var event events.S3Event
 		if err := json.Unmarshal(raw, &event); err != nil {
 			return nil, fmt.Errorf("unmarshal S3 event: %w", err)
 		}
-		if err := t.ingester.Handle(ctx, event); err != nil {
+		if err := r.ingester.Handle(ctx, event); err != nil {
 			return nil, fmt.Errorf("ingest S3 event: %w", err)
 		}
 		return nil, nil
 	}
 
 	if task, ok := checkTask(raw); ok {
-		if err := t.checks.Verify(ctx, task.CheckID, task.OwnerID); err != nil {
+		if err := r.checks.Verify(ctx, task.CheckID, task.OwnerID); err != nil {
 			return nil, fmt.Errorf("verify check task: %w", err)
 		}
 		return nil, nil
@@ -56,7 +56,7 @@ func (t *Transport) Handle(ctx context.Context, raw json.RawMessage) (any, error
 	if err := json.Unmarshal(raw, &request); err != nil {
 		return nil, fmt.Errorf("unmarshal API request: %w", err)
 	}
-	resp, err := t.proxy(ctx, request)
+	resp, err := r.proxy(ctx, request)
 	if err != nil {
 		return resp, fmt.Errorf("proxy request: %w", err)
 	}

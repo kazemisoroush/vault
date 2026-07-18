@@ -1,4 +1,4 @@
-package transport_test
+package router_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
-	"github.com/kazemisoroush/vault/backend/internal/transport"
+	"github.com/kazemisoroush/vault/backend/internal/router"
 )
 
 const (
@@ -33,10 +33,10 @@ func TestHandleRoutesS3ToIngester(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{}, nil
 	}
-	adapter := transport.NewTransport(proxy, ingester, stubVerifier{})
+	adapter := router.NewEventRouter(proxy, ingester, stubVerifier{})
 
 	// Act
-	_, err := adapter.Handle(context.Background(), json.RawMessage(s3Payload))
+	_, err := adapter.Route(context.Background(), json.RawMessage(s3Payload))
 
 	// Assert
 	require.NoError(t, err)
@@ -53,10 +53,10 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 		proxyCalled = true
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 	}
-	adapter := transport.NewTransport(proxy, ingester, stubVerifier{})
+	adapter := router.NewEventRouter(proxy, ingester, stubVerifier{})
 
 	// Act
-	resp, err := adapter.Handle(context.Background(), json.RawMessage(apiPayload))
+	resp, err := adapter.Route(context.Background(), json.RawMessage(apiPayload))
 
 	// Assert
 	require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestHandleRoutesAPIToProxy(t *testing.T) {
 	assert.Equal(t, 200, resp.(events.APIGatewayV2HTTPResponse).StatusCode)
 }
 
-// stubVerifier satisfies transport.CheckVerifier for tests that never route a check task.
+// stubVerifier satisfies router.CheckVerifier for tests that never route a check task.
 type stubVerifier struct {
 	verify func(ctx context.Context, checkID string, ownerID string) error
 }

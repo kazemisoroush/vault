@@ -26,8 +26,8 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
 	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/llm"
+	"github.com/kazemisoroush/vault/backend/internal/router"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
-	"github.com/kazemisoroush/vault/backend/internal/transport"
 	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
@@ -78,6 +78,6 @@ func main() {
 	}
 	ingester := ingest.NewHandler(idx, blobs, extractor, embedder, vectorStore)
 
-	adapter := transport.NewTransport(proxy, ingester, verifier)
-	lambda.Start(adapter.Handle)
+	adapter := router.NewEventRouter(proxy, ingester, verifier)
+	lambda.Start(adapter.Route)
 }
