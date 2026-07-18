@@ -14,6 +14,10 @@ const (
 	MetaFileName = "fileName"
 )
 
+// MetadataContentType is the media type of the sidecar bytes MetadataSidecar produces, so the
+// ingestion side stores the sidecar with the right type without knowing its serialization.
+const MetadataContentType = "application/json"
+
 // MetadataSidecar returns the Knowledge Base metadata sidecar JSON for a file: the attributes the
 // managed data source stamps on every passage it indexes from the object, so a retrieved passage
 // carries the file id and name. The ingestion side writes this next to the stored object.

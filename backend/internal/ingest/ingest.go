@@ -123,7 +123,7 @@ func (h *Handler) writeMetadata(ctx context.Context, file domain.File) error {
 	if err != nil {
 		return fmt.Errorf("build metadata for %q: %w", file.ID, err)
 	}
-	if err := h.blobs.Put(ctx, blob.MetadataKey(file.ID), "application/json", body); err != nil {
+	if err := h.blobs.Put(ctx, blob.MetadataKey(file.ID), kb.MetadataContentType, body); err != nil {
 		return fmt.Errorf("put metadata for %q: %w", file.ID, err)
 	}
 	return nil
