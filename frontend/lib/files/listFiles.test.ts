@@ -7,7 +7,7 @@ describe("listFiles", () => {
   it("returns the files from the response", async () => {
     // Arrange
     const files = [
-      { id: "1", name: "a.txt", contentType: "text/plain", size: 1, status: "ready", createdAt: "", updatedAt: "" },
+      { id: "1", name: "a.txt", contentType: "text/plain", size: 1, status: "ingested", createdAt: "", updatedAt: "" },
     ];
     const api = { GET: vi.fn().mockResolvedValue({ data: { files } }) } as unknown as ApiClient;
 

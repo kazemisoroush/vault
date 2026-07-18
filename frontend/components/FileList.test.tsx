@@ -6,7 +6,7 @@ import type { VaultFile } from "../lib/files/vaultFile";
 import { FileList } from "./FileList";
 
 const files: VaultFile[] = [
-  { id: "1", name: "receipt.jpg", contentType: "image/jpeg", size: 1, status: "ready", createdAt: "", updatedAt: "" },
+  { id: "1", name: "receipt.jpg", contentType: "image/jpeg", size: 1, status: "ingested", createdAt: "", updatedAt: "" },
   { id: "2", name: "contract.pdf", contentType: "application/pdf", size: 2, status: "pending", createdAt: "", updatedAt: "" },
 ];
 
@@ -25,7 +25,7 @@ describe("FileList", () => {
 
     // Assert
     expect(screen.getByText("receipt.jpg")).toBeInTheDocument();
-    expect(screen.getByText("ready")).toBeInTheDocument();
+    expect(screen.getByText("ingested")).toBeInTheDocument();
     expect(screen.getByText("contract.pdf")).toBeInTheDocument();
     expect(screen.getByText("pending")).toBeInTheDocument();
   });

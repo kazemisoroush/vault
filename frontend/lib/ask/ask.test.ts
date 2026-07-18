@@ -8,7 +8,7 @@ describe("ask", () => {
     // Arrange
     const results = [
       {
-        file: { id: "1", name: "a.txt", contentType: "text/plain", size: 1, status: "ready", createdAt: "", updatedAt: "" },
+        file: { id: "1", name: "a.txt", contentType: "text/plain", size: 1, status: "ingested", createdAt: "", updatedAt: "" },
         downloadUrl: "https://get/1",
       },
     ];
