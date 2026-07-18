@@ -27,7 +27,6 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/router"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
-	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 func main() {
@@ -44,11 +43,6 @@ func main() {
 	blobs := blob.NewS3Store(s3.NewFromConfig(awsCfg), cfg.Bucket)
 	recorder := calls.NewDynamoCalls(dynamoClient, cfg.CallsTable)
 
-	vectorStore, err := vectors.NewS3Vectors(ctx, cfg.BedrockRegion, cfg.VectorBucket, cfg.VectorIndex)
-	if err != nil {
-		log.Fatalf("configure vector store: %v", err)
-	}
-
 	// Retrieval runs against the managed Knowledge Base by hybrid search, for both the agent and the check.
 	searcher := kb.NewBedrockSearcher(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
 
@@ -61,7 +55,7 @@ func main() {
 	verifier := checks.NewVerifier(checkStore, searcher, idx, checkModel)
 	enqueuer := checks.NewLambdaEnqueuer(lambdasvc.NewFromConfig(awsCfg), cfg.FunctionName)
 
-	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
+	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}

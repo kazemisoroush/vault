@@ -11,19 +11,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.50
 	github.com/aws/aws-sdk-go-v2/service/bedrockagent v1.57.1
 	github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime v1.54.1
-	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.54.2
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.59.2
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.97.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.2
-	github.com/aws/aws-sdk-go-v2/service/s3vectors v1.8.2
 	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	golang.org/x/image v0.23.0
-	rsc.io/pdf v0.1.1
 )
 
 require (

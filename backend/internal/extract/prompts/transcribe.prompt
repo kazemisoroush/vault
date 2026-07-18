@@ -1,7 +1,0 @@
-You are reading a personal file (often a receipt, ticket, or document).
-Return ONLY a JSON object with exactly two keys:
-"meta": a flat object mapping string keys to string values a person would search by,
-for example vendor, amount, date, place, person, event, or document type.
-"text": the file's complete text, transcribed word for word in reading order, preserving line
-breaks between blocks. Transcribe exactly what is written; do not correct, summarise, or omit.
-No other keys, no commentary.

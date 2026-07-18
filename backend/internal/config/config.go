@@ -16,11 +16,7 @@ type Config struct {
 	Addr          string
 	AuthDisabled  bool
 	BedrockRegion string
-	ExtractModel  string
 	RerankModel   string
-	EmbedModel    string
-	VectorBucket  string
-	VectorIndex   string
 	// KnowledgeBaseID is the managed Bedrock Knowledge Base the searcher queries by hybrid search.
 	KnowledgeBaseID string
 	// KnowledgeBaseDataSourceID is the Knowledge Base data source the syncer runs ingestion jobs on.
@@ -42,11 +38,7 @@ func Load() Config {
 		Addr:                      os.Getenv("VAULT_ADDR"),
 		AuthDisabled:              os.Getenv("VAULT_AUTH_DISABLED") == "true",
 		BedrockRegion:             os.Getenv("VAULT_BEDROCK_REGION"),
-		ExtractModel:              os.Getenv("VAULT_EXTRACT_MODEL"),
 		RerankModel:               os.Getenv("VAULT_RERANK_MODEL"),
-		EmbedModel:                os.Getenv("VAULT_EMBED_MODEL"),
-		VectorBucket:              os.Getenv("VAULT_VECTOR_BUCKET"),
-		VectorIndex:               os.Getenv("VAULT_VECTOR_INDEX"),
 		KnowledgeBaseID:           os.Getenv("VAULT_KNOWLEDGE_BASE_ID"),
 		KnowledgeBaseDataSourceID: os.Getenv("VAULT_KNOWLEDGE_BASE_DATA_SOURCE_ID"),
 		FunctionName:              os.Getenv("AWS_LAMBDA_FUNCTION_NAME"),

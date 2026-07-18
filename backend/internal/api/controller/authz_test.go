@@ -26,8 +26,8 @@ func withOwner(r *http.Request, owner string) *http.Request {
 
 func TestDropStampsTheOwner(t *testing.T) {
 	// Arrange
-	idx, blobs, store := mockDeps(t)
-	c := NewFileController(idx, blobs, store)
+	idx, blobs := mockDeps(t)
+	c := NewFileController(idx, blobs)
 	c.now = func() time.Time { return time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC) }
 	c.newID = func() string { return "test-id" }
 	blobs.EXPECT().PresignPut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return("https://upload", nil)
@@ -47,8 +47,8 @@ func TestDropStampsTheOwner(t *testing.T) {
 
 func TestGetHidesAnotherOwnersFile(t *testing.T) {
 	// Arrange: the record exists but belongs to bob; alice must see a 404, not a 403.
-	idx, blobs, store := mockDeps(t)
-	c := NewFileController(idx, blobs, store)
+	idx, blobs := mockDeps(t)
+	c := NewFileController(idx, blobs)
 	idx.EXPECT().Get(gomock.Any(), "f1").Return(domain.File{ID: "f1", OwnerID: "bob", Key: "files/f1"}, nil)
 	req := withOwner(httptest.NewRequest(http.MethodGet, "/files/f1", nil), "alice")
 	req.SetPathValue("id", "f1")
@@ -63,8 +63,8 @@ func TestGetHidesAnotherOwnersFile(t *testing.T) {
 
 func TestListScopesToTheCaller(t *testing.T) {
 	// Arrange
-	idx, blobs, store := mockDeps(t)
-	c := NewFileController(idx, blobs, store)
+	idx, blobs := mockDeps(t)
+	c := NewFileController(idx, blobs)
 	idx.EXPECT().List(gomock.Any(), "alice", gomock.Any(), gomock.Any()).Return(nil, "", nil)
 	req := withOwner(httptest.NewRequest(http.MethodGet, "/files", nil), "alice")
 
