@@ -27,6 +27,7 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/router"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
+	"github.com/kazemisoroush/vault/backend/internal/vision"
 )
 
 func main() {
@@ -61,7 +62,8 @@ func main() {
 	}
 	proxy := httpadapter.NewV2(apiHandler).ProxyWithContext
 
-	ingester := ingest.NewHandler(idx, blobs)
+	transcriber := vision.NewClaudeTranscriber(cfg.BedrockRegion, cfg.RerankModel, recorder)
+	ingester := ingest.NewHandler(idx, blobs, transcriber)
 	indexer := kb.NewBedrockIndexer(bedrockagent.NewFromConfig(awsCfg), cfg.KnowledgeBaseID, cfg.KnowledgeBaseDataSourceID)
 	syncer := ingest.NewSyncer(indexer, idx)
 

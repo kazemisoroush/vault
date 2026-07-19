@@ -37,24 +37,28 @@ func hashOf(content []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func TestSettleMovesToContentKeyAndWritesMetadata(t *testing.T) {
-	// Arrange
+func TestSettleTranscribesAnImageIntoTheKBSource(t *testing.T) {
+	// Arrange: an image, which the Knowledge Base cannot read, is transcribed to searchable text.
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
+	transcriber := mocks.NewMockTranscriber(ctrl)
 
-	content := []byte("the file bytes")
+	content := []byte("the image bytes")
 	hash := hashOf(content)
 	staging := "uploads/upl-1"
-	canonical := "files/" + hash
-	metaKey := canonical + ".metadata.json"
-	pending := domain.File{ID: "upl-1", OwnerID: "alice", Key: staging, Name: "petrol.jpg", ContentType: "image/jpeg", Status: domain.StatusPending}
+	raw := "files/" + hash
+	kbSource := "kb/" + hash
+	kbMeta := kbSource + ".metadata.json"
+	pending := domain.File{ID: "upl-1", OwnerID: "alice", Key: staging, Name: "passport.jpg", ContentType: "image/jpeg", Status: domain.StatusPending}
 
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
 	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
-	blobs.EXPECT().Copy(gomock.Any(), staging, canonical).Return(nil)
+	blobs.EXPECT().Copy(gomock.Any(), staging, raw).Return(nil)
+	transcriber.EXPECT().Transcribe(gomock.Any(), content, "image/jpeg").Return("Passport no. RA3495037", nil)
+	blobs.EXPECT().Put(gomock.Any(), kbSource, "text/plain; charset=utf-8", []byte("Passport no. RA3495037")).Return(nil)
 	var metaBody []byte
-	blobs.EXPECT().Put(gomock.Any(), metaKey, "application/json", gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, body []byte) error {
+	blobs.EXPECT().Put(gomock.Any(), kbMeta, "application/json", gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, body []byte) error {
 		metaBody = body
 		return nil
 	})
@@ -66,47 +70,74 @@ func TestSettleMovesToContentKeyAndWritesMetadata(t *testing.T) {
 	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
-	h := ingest.NewHandler(idx, blobs)
+	h := ingest.NewHandler(idx, blobs, transcriber)
 
 	// Act
 	err := h.Handle(context.Background(), s3Event(staging))
 
-	// Assert: the record settled under the content hash as landed, keeping its name.
+	// Assert: settled under the hash as landed, raw kept for download, transcript is the KB source.
 	require.NoError(t, err)
 	assert.Equal(t, hash, saved.ID)
-	assert.Equal(t, canonical, saved.Key)
+	assert.Equal(t, raw, saved.Key)
 	assert.Equal(t, domain.StatusLanded, saved.Status)
-	assert.Equal(t, "petrol.jpg", saved.Name)
 
-	// The metadata sidecar ties the file id and name to every passage the Knowledge Base indexes.
+	// The sidecar next to the KB source ties indexed passages back to this file.
 	var meta struct {
 		MetadataAttributes map[string]string `json:"metadataAttributes"`
 	}
 	require.NoError(t, json.Unmarshal(metaBody, &meta))
 	assert.Equal(t, hash, meta.MetadataAttributes["fileId"])
-	assert.Equal(t, "petrol.jpg", meta.MetadataAttributes["fileName"])
+	assert.Equal(t, "passport.jpg", meta.MetadataAttributes["fileName"])
 }
 
-func TestSettleMetadataWriteErrorIsReturned(t *testing.T) {
-	// Arrange: the sidecar write fails, so the invocation fails and the S3 event redrives.
+func TestSettleCopiesAParseableDocumentAsTheKBSource(t *testing.T) {
+	// Arrange: a document the Knowledge Base parses itself is copied through, not transcribed.
 	ctrl := gomock.NewController(t)
 	idx := mocks.NewMockIndex(ctrl)
 	blobs := mocks.NewMockStore(ctrl)
+	transcriber := mocks.NewMockTranscriber(ctrl)
 
-	content := []byte("the file bytes")
+	content := []byte("plain document text")
+	hash := hashOf(content)
 	staging := "uploads/upl-1"
-	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: staging, Name: "x", Status: domain.StatusPending}, nil)
+	raw := "files/" + hash
+	kbSource := "kb/" + hash
+	pending := domain.File{ID: "upl-1", OwnerID: "alice", Key: staging, Name: "notes.txt", ContentType: "text/plain", Status: domain.StatusPending}
+
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
+	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "text/plain", nil)
+	blobs.EXPECT().Copy(gomock.Any(), staging, raw).Return(nil)
+	// Not an image or PDF, so the raw is copied to the KB source and the transcriber is never called.
+	blobs.EXPECT().Copy(gomock.Any(), raw, kbSource).Return(nil)
+	blobs.EXPECT().Put(gomock.Any(), kbSource+".metadata.json", "application/json", gomock.Any()).Return(nil)
+	idx.EXPECT().Put(gomock.Any(), gomock.Any()).Return(nil)
+	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
+	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
+
+	h := ingest.NewHandler(idx, blobs, transcriber)
+
+	// Act & Assert
+	require.NoError(t, h.Handle(context.Background(), s3Event(staging)))
+}
+
+func TestSettleTranscriptionErrorIsReturned(t *testing.T) {
+	// Arrange: transcription fails, so the invocation fails and the S3 event redrives.
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	blobs := mocks.NewMockStore(ctrl)
+	transcriber := mocks.NewMockTranscriber(ctrl)
+
+	content := []byte("the image bytes")
+	staging := "uploads/upl-1"
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: staging, Name: "x.jpg", ContentType: "image/jpeg", Status: domain.StatusPending}, nil)
 	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "image/jpeg", nil)
 	blobs.EXPECT().Copy(gomock.Any(), staging, gomock.Any()).Return(nil)
-	blobs.EXPECT().Put(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("s3 down"))
+	transcriber.EXPECT().Transcribe(gomock.Any(), gomock.Any(), gomock.Any()).Return("", errors.New("model down"))
 
-	h := ingest.NewHandler(idx, blobs)
+	h := ingest.NewHandler(idx, blobs, transcriber)
 
-	// Act
-	err := h.Handle(context.Background(), s3Event(staging))
-
-	// Assert: nothing settled, the record stays pending for the redrive.
-	assert.Error(t, err)
+	// Act & Assert: nothing settled, the record stays pending for the redrive.
+	assert.Error(t, h.Handle(context.Background(), s3Event(staging)))
 }
 
 func TestSettleReadErrorIsReturned(t *testing.T) {
@@ -118,13 +149,10 @@ func TestSettleReadErrorIsReturned(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", Key: "uploads/upl-1", Status: domain.StatusPending}, nil)
 	blobs.EXPECT().Get(gomock.Any(), "uploads/upl-1").Return(nil, "", errors.New("s3 down"))
 
-	h := ingest.NewHandler(idx, blobs)
+	h := ingest.NewHandler(idx, blobs, mocks.NewMockTranscriber(ctrl))
 
-	// Act
-	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
-
-	// Assert
-	assert.Error(t, err)
+	// Act & Assert
+	assert.Error(t, h.Handle(context.Background(), s3Event("uploads/upl-1")))
 }
 
 func TestSettleAlreadySettledIsNoOp(t *testing.T) {
@@ -133,13 +161,10 @@ func TestSettleAlreadySettledIsNoOp(t *testing.T) {
 	idx := mocks.NewMockIndex(ctrl)
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{}, index.ErrNotFound)
 
-	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl))
+	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl), mocks.NewMockTranscriber(ctrl))
 
-	// Act
-	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
-
-	// Assert: no-op, no error, nothing else touched.
-	require.NoError(t, err)
+	// Act & Assert: no-op, no error, nothing else touched.
+	require.NoError(t, h.Handle(context.Background(), s3Event("uploads/upl-1")))
 }
 
 func TestSettleGetErrorIsReturned(t *testing.T) {
@@ -148,11 +173,8 @@ func TestSettleGetErrorIsReturned(t *testing.T) {
 	idx := mocks.NewMockIndex(ctrl)
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{}, errors.New("dynamo down"))
 
-	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl))
+	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl), mocks.NewMockTranscriber(ctrl))
 
-	// Act
-	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))
-
-	// Assert
-	assert.Error(t, err)
+	// Act & Assert
+	assert.Error(t, h.Handle(context.Background(), s3Event("uploads/upl-1")))
 }

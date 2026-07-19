@@ -46,20 +46,30 @@ func (s *Syncer) Sync(ctx context.Context) error {
 		return nil // nothing new to index
 	}
 
-	completed, err := s.indexer.Sync(ctx)
+	result, err := s.indexer.Sync(ctx)
 	if err != nil {
 		return fmt.Errorf("run ingestion sync: %w", err)
 	}
-	if !completed {
+	if !result.Completed {
 		return nil // a job was already running; a later run advances these files
 	}
 
+	failed := make(map[string]bool, len(result.FailedFileIDs))
+	for _, id := range result.FailedFileIDs {
+		failed[id] = true
+	}
+
 	for _, file := range landed {
-		// AdvanceStatus is conditional, so a file deleted or changed since the snapshot is skipped
-		// rather than resurrected. One record failing is not fatal: it stays landed and the next
-		// run retries.
-		if err := s.index.AdvanceStatus(ctx, file.ID, domain.StatusLanded, domain.StatusIngested); err != nil {
-			log.Printf("advance file %s to ingested: %v", file.ID, err)
+		// A file the job could not index becomes failed, not ingested, so the status never claims
+		// an unsearchable file is searchable. AdvanceStatus is conditional, so a file deleted or
+		// changed since the snapshot is skipped rather than resurrected; a per-file error is not
+		// fatal, it stays landed and the next run retries.
+		to := domain.StatusIngested
+		if failed[file.ID] {
+			to = domain.StatusFailed
+		}
+		if err := s.index.AdvanceStatus(ctx, file.ID, domain.StatusLanded, to); err != nil {
+			log.Printf("advance file %s to %s: %v", file.ID, to, err)
 		}
 	}
 	return nil

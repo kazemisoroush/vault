@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -35,11 +38,11 @@ func NewBedrockIndexer(client indexerClient, kbID string, dataSourceID string) *
 	return &BedrockIndexer{client: client, kbID: kbID, dataSourceID: dataSourceID, pollInterval: defaultPollInterval}
 }
 
-// Sync starts an ingestion job for the data source and waits until it reaches a terminal state. It
-// returns true when a job it started completed, so the caller may advance the files it snapshotted
-// before the call. If a job is already running, it starts nothing and returns false, leaving the
-// in-flight job and a later run to finish the work; the data source allows only one job at a time.
-func (i *BedrockIndexer) Sync(ctx context.Context) (bool, error) {
+// Sync starts an ingestion job for the data source and waits until it reaches a terminal state. On
+// a completed job it returns the files the job could not index, so the caller may advance the rest
+// and mark those failed. If a job is already running, it starts nothing and returns not-completed,
+// leaving the in-flight job and a later run to finish; the data source allows one job at a time.
+func (i *BedrockIndexer) Sync(ctx context.Context) (SyncResult, error) {
 	out, err := i.client.StartIngestionJob(ctx, &bedrockagent.StartIngestionJobInput{
 		KnowledgeBaseId: aws.String(i.kbID),
 		DataSourceId:    aws.String(i.dataSourceID),
@@ -47,20 +50,21 @@ func (i *BedrockIndexer) Sync(ctx context.Context) (bool, error) {
 	if err != nil {
 		var conflict *types.ConflictException
 		if errors.As(err, &conflict) {
-			return false, nil
+			return SyncResult{}, nil
 		}
-		return false, fmt.Errorf("start ingestion job: %w", err)
+		return SyncResult{}, fmt.Errorf("start ingestion job: %w", err)
 	}
 
-	completed, err := i.wait(ctx, aws.ToString(out.IngestionJob.IngestionJobId))
+	result, err := i.wait(ctx, aws.ToString(out.IngestionJob.IngestionJobId))
 	if err != nil {
-		return false, fmt.Errorf("await ingestion job: %w", err)
+		return SyncResult{}, fmt.Errorf("await ingestion job: %w", err)
 	}
-	return completed, nil
+	return result, nil
 }
 
-// wait polls the ingestion job until it reaches a terminal state or the context is done.
-func (i *BedrockIndexer) wait(ctx context.Context, jobID string) (bool, error) {
+// wait polls the ingestion job until it reaches a terminal state or the context is done. On a
+// completed job it parses the failure reasons for the file ids the job could not index.
+func (i *BedrockIndexer) wait(ctx context.Context, jobID string) (SyncResult, error) {
 	for {
 		out, err := i.client.GetIngestionJob(ctx, &bedrockagent.GetIngestionJobInput{
 			KnowledgeBaseId: aws.String(i.kbID),
@@ -68,18 +72,39 @@ func (i *BedrockIndexer) wait(ctx context.Context, jobID string) (bool, error) {
 			IngestionJobId:  aws.String(jobID),
 		})
 		if err != nil {
-			return false, fmt.Errorf("get ingestion job %q: %w", jobID, err)
+			return SyncResult{}, fmt.Errorf("get ingestion job %q: %w", jobID, err)
 		}
 		switch out.IngestionJob.Status {
 		case types.IngestionJobStatusComplete:
-			return true, nil
+			return SyncResult{Completed: true, FailedFileIDs: failedFileIDs(out.IngestionJob.FailureReasons)}, nil
 		case types.IngestionJobStatusFailed, types.IngestionJobStatusStopped, types.IngestionJobStatusStopping:
-			return false, fmt.Errorf("ingestion job %q ended in status %s", jobID, out.IngestionJob.Status)
+			return SyncResult{}, fmt.Errorf("ingestion job %q ended in status %s", jobID, out.IngestionJob.Status)
 		}
 		select {
 		case <-ctx.Done():
-			return false, fmt.Errorf("wait for ingestion job %q: %w", jobID, ctx.Err())
+			return SyncResult{}, fmt.Errorf("wait for ingestion job %q: %w", jobID, ctx.Err())
 		case <-time.After(i.pollInterval):
 		}
 	}
+}
+
+// s3URIPattern matches the S3 URIs the ingestion failure reasons list for the objects that failed.
+var s3URIPattern = regexp.MustCompile(`s3://[^\s,\]"]+`)
+
+// failedFileIDs pulls the file ids out of a job's failure reasons. Each reason lists the failed
+// objects as S3 URIs, and a file id is the object's key basename with any metadata suffix removed,
+// so the caller can mark exactly those files failed rather than searchable.
+func failedFileIDs(reasons []string) []string {
+	seen := make(map[string]bool)
+	var ids []string
+	for _, reason := range reasons {
+		for _, uri := range s3URIPattern.FindAllString(reason, -1) {
+			id := strings.TrimSuffix(path.Base(uri), ".metadata.json")
+			if id != "" && id != "." && !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
 }

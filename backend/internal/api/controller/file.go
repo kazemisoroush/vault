@@ -192,10 +192,13 @@ func (c *FileController) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove the Knowledge Base metadata sidecar too, so the next ingestion sync drops the file
-	// from the index. A leftover sidecar is harmless, so a failure here is logged, not fatal.
-	if err := c.blobs.Delete(r.Context(), blob.MetadataKey(file.ID)); err != nil {
-		log.Printf("delete metadata sidecar for %s: %v", file.ID, err)
+	// Remove the Knowledge Base source and its metadata sidecar too, so the next ingestion sync
+	// drops the file from the index. Leftovers are harmless, so a failure here is logged, not fatal.
+	if err := c.blobs.Delete(r.Context(), blob.KBKey(file.ID)); err != nil {
+		log.Printf("delete kb source for %s: %v", file.ID, err)
+	}
+	if err := c.blobs.Delete(r.Context(), blob.KBMetadataKey(file.ID)); err != nil {
+		log.Printf("delete kb metadata sidecar for %s: %v", file.ID, err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

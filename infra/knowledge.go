@@ -219,9 +219,10 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) knowledgeBase {
 	})
 	kb.Node().AddDependency(index)
 
-	// The S3 data source, parsed by Bedrock Data Automation so PDFs and image scans yield text and
-	// entities (the passport is an image; without this it would carry no searchable text). Only the
-	// files/ prefix is ingested, so staged uploads and metadata elsewhere never reach the index.
+	// The S3 data source ingests only the kb/ prefix, which the backend fills with each file's
+	// searchable representation: transcribed text for images and scanned PDFs (which the data
+	// source cannot read on its own), or a copy of a document it parses. The raw uploads under
+	// files/ and staged uploads under uploads/ are never indexed.
 	dataSource := awsbedrock.NewCfnDataSource(stack, jsii.String("KbDataSource"), &awsbedrock.CfnDataSourceProps{
 		KnowledgeBaseId: kb.AttrKnowledgeBaseId(),
 		Name:            jsii.String("VaultFiles"),
@@ -229,7 +230,7 @@ func newKnowledgeBase(stack awscdk.Stack, bucket awss3.Bucket) knowledgeBase {
 			Type: jsii.String("S3"),
 			S3Configuration: &awsbedrock.CfnDataSource_S3DataSourceConfigurationProperty{
 				BucketArn:         bucket.BucketArn(),
-				InclusionPrefixes: jsii.Strings("files/"),
+				InclusionPrefixes: jsii.Strings("kb/"),
 			},
 		},
 		VectorIngestionConfiguration: &awsbedrock.CfnDataSource_VectorIngestionConfigurationProperty{

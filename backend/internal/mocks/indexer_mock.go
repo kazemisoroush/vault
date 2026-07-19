@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	kb "github.com/kazemisoroush/vault/backend/internal/kb"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,10 +42,10 @@ func (m *MockIndexer) EXPECT() *MockIndexerMockRecorder {
 }
 
 // Sync mocks base method.
-func (m *MockIndexer) Sync(ctx context.Context) (bool, error) {
+func (m *MockIndexer) Sync(ctx context.Context) (kb.SyncResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sync", ctx)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(kb.SyncResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
