@@ -2,6 +2,7 @@ package vision
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	_ "image/gif" // register the GIF decoder for image.Decode
 	"image/jpeg"
@@ -16,11 +17,13 @@ import (
 )
 
 // maxImageEdgePixels is the longest side the model keeps before it downscales anyway, so a larger
-// image is scaled to fit. maxImagePixels caps how big an image we will decode, so a compression
+// image is scaled to fit. maxImagePixels caps the pixels of a single decoded frame, so a compression
 // bomb (a tiny file that decodes to a huge bitmap) cannot exhaust the function's memory. The cap is
 // sized for the worst-case decode, the HEIC path, which holds two full-resolution copies at once
 // (the wazero WASM linear memory plus the Go image copy) at roughly eight bytes per pixel, so 50M
-// pixels is about 400 MB of transient bitmap, well under the ingest function's 1024 MB.
+// pixels is about 400 MB of transient bitmap, well under the ingest function's 1024 MB. A multi-frame
+// HEIC sequence would decode every frame at once and slip past this single-frame cap, so toJPEG
+// declines one outright.
 const (
 	maxImageEdgePixels = 1568
 	maxImagePixels     = 50_000_000
@@ -67,8 +70,14 @@ func imageBlock(content []byte) llm.Part {
 // model's per-image byte limit, downscaling an oversized one. It returns ok=false when the image is
 // larger than the pixel cap or cannot be decoded, so the caller sends the original.
 func toJPEG(content []byte) ([]byte, bool) {
-	config, _, err := image.DecodeConfig(bytes.NewReader(content))
+	config, format, err := image.DecodeConfig(bytes.NewReader(content))
 	if err != nil || int64(config.Width)*int64(config.Height) > maxImagePixels {
+		return nil, false
+	}
+	// DecodeConfig reports one frame's size, but the HEIC decoder decodes every frame of a sequence
+	// at once, so a small file with many frames slips past the single-frame cap above. Decline a
+	// sequence rather than risk exhausting the function's memory; the model only reads one frame.
+	if format == "heic" && heicHasMovieBox(content) {
 		return nil, false
 	}
 	source, _, err := image.Decode(bytes.NewReader(content))
@@ -83,6 +92,36 @@ func toJPEG(content []byte) ([]byte, bool) {
 	xdraw.CatmullRom.Scale(scaled, bounds, source, source.Bounds(), xdraw.Over, nil)
 
 	return encodeUnderLimit(scaled)
+}
+
+// heicHasMovieBox reports whether the HEIC bytes carry a top-level moov box, which is what marks an
+// image sequence. The decoder takes its all-frames path on exactly those files, so this walk mirrors
+// the decoder's own top-level box parsing (a still image has a meta box and no moov). It reads only
+// the box headers, never a payload, and stops on the first malformed length so it cannot loop or run
+// off the end.
+func heicHasMovieBox(content []byte) bool {
+	for off := 0; off+8 <= len(content); {
+		size := int(binary.BigEndian.Uint32(content[off : off+4]))
+		if string(content[off+4:off+8]) == "moov" {
+			return true
+		}
+		hdr := 8
+		switch size {
+		case 1:
+			if off+16 > len(content) {
+				return false
+			}
+			size = int(binary.BigEndian.Uint64(content[off+8 : off+16]))
+			hdr = 16
+		case 0:
+			size = len(content) - off
+		}
+		if size < hdr || off+size > len(content) {
+			return false
+		}
+		off += size
+	}
+	return false
 }
 
 // scaledBounds returns the destination rectangle for an image whose longest edge is capped at max,

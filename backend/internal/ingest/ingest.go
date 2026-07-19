@@ -100,8 +100,8 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 	file := pending
 	file.ID = hash
 	file.Key = blob.Key(hash)
-	// Correct a mislabelled type: browsers often upload an image the model can read, such as HEIC,
-	// as application/octet-stream, which would otherwise skip transcription and fail in the index.
+	// Correct a mislabelled type: browsers often upload an image, such as HEIC, as
+	// application/octet-stream, which would otherwise skip transcription and fail in the index.
 	file.ContentType = vision.DetectContentType(contentType, content)
 
 	if err := h.blobs.Copy(ctx, stagingKey, file.Key); err != nil {

@@ -2,6 +2,7 @@ package vision
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	"image/png"
 	"strings"
@@ -10,6 +11,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// box builds one ISOBMFF box (a 32-bit size, a 4-char type, then the payload), the shape the HEIC
+// container uses.
+func box(typ string, payload []byte) []byte {
+	b := make([]byte, 8+len(payload))
+	binary.BigEndian.PutUint32(b[0:4], uint32(8+len(payload)))
+	copy(b[4:8], typ)
+	copy(b[8:], payload)
+	return b
+}
 
 func TestSupportedCoversImagesAndPDFs(t *testing.T) {
 	assert.True(t, Supported("image/jpeg"))
@@ -54,6 +65,25 @@ func TestToJPEGNormalizesAPNG(t *testing.T) {
 func TestToJPEGDeclinesNonImageBytes(t *testing.T) {
 	_, ok := toJPEG([]byte("this is not an image"))
 	assert.False(t, ok)
+}
+
+func TestHeicHasMovieBoxDetectsASequence(t *testing.T) {
+	still := append(box("ftyp", []byte("heicmif1")), box("meta", []byte("meta payload"))...)
+	still = append(still, box("mdat", []byte("image data"))...)
+	assert.False(t, heicHasMovieBox(still), "a still image has no moov box")
+
+	sequence := append(box("ftyp", []byte("msf1hevc")), box("moov", []byte("movie payload"))...)
+	assert.True(t, heicHasMovieBox(sequence), "an image sequence carries a moov box")
+}
+
+func TestHeicHasMovieBoxHandlesMalformedBytesWithoutPanic(t *testing.T) {
+	// A truncated header, a box shorter than its header, and a length running past the end must all
+	// stop the walk rather than loop or read out of bounds.
+	assert.False(t, heicHasMovieBox([]byte("ftyp")))
+	assert.False(t, heicHasMovieBox([]byte{0, 0, 0, 4, 'f', 't', 'y', 'p'}))
+	overrun := []byte{0, 0, 0, 255, 'f', 't', 'y', 'p', 'm', 'i', 'f', '1'}
+	assert.False(t, heicHasMovieBox(overrun))
+	assert.False(t, heicHasMovieBox(nil))
 }
 
 func TestDetectContentTypeCorrectsAMislabelledImage(t *testing.T) {
