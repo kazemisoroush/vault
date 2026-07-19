@@ -7,10 +7,9 @@ import (
 	"fmt"
 
 	"github.com/kazemisoroush/vault/backend/internal/domain"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/llm"
-	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 // ModelOp is the operation label the agent's model calls are tagged with on the trace.
@@ -29,22 +28,22 @@ type Result struct {
 	Files []domain.File
 }
 
-// Agent answers queries by driving the model over the vault's stores through its tools.
-type Agent struct {
+// QuestionAnswerer answers queries by driving the model over the vault through its tools: hybrid search over
+// the Knowledge Base, and a read of one file's record.
+type QuestionAnswerer struct {
 	model    Converser
-	embedder embed.Embedder
-	vectors  vectors.Store
+	searcher kb.Searcher
 	index    index.Index
 }
 
-// NewAgent builds an Agent over the model and the stores that already serve the vault.
-func NewAgent(model Converser, embedder embed.Embedder, store vectors.Store, idx index.Index) *Agent {
-	return &Agent{model: model, embedder: embedder, vectors: store, index: idx}
+// NewQuestionAnswerer builds a QuestionAnswerer over the model, the Knowledge Base searcher, and the file index.
+func NewQuestionAnswerer(model Converser, s kb.Searcher, idx index.Index) *QuestionAnswerer {
+	return &QuestionAnswerer{model: model, searcher: s, index: idx}
 }
 
 // Answer lets the model query the owner's vault through the tools and returns the answer with the
 // files it used. Every store call the tools make is scoped to ownerID, which the model cannot set.
-func (a *Agent) Answer(ctx context.Context, ownerID, query string) (Result, error) {
+func (a *QuestionAnswerer) Answer(ctx context.Context, ownerID, query string) (Result, error) {
 	reply, err := a.model.Converse(ctx, llm.Conversation{
 		System:    systemPrompt,
 		Prompt:    query,
@@ -63,7 +62,7 @@ func (a *Agent) Answer(ctx context.Context, ownerID, query string) (Result, erro
 
 // load fetches the owner's records for the ids the model cited, skipping any it does not own or
 // that no longer exist, so a stale citation never leaks another owner's file.
-func (a *Agent) load(ctx context.Context, ownerID string, ids []string) []domain.File {
+func (a *QuestionAnswerer) load(ctx context.Context, ownerID string, ids []string) []domain.File {
 	files := make([]domain.File, 0, len(ids))
 	for _, id := range ids {
 		file, err := a.index.Get(ctx, id)

@@ -159,10 +159,10 @@ export interface components {
             /** Format: int64 */
             size: number;
             /**
-             * @description Extraction lifecycle. A dropped file is pending until the extractor fills its metadata, then ready, or failed if the extractor errored.
+             * @description Ingestion lifecycle. A dropped file is pending while it is staged, landed once it is stored and queued for the Knowledge Base, ingested once the Knowledge Base has indexed it and it is searchable, or failed on a terminal error.
              * @enum {string}
              */
-            status: "pending" | "ready" | "failed";
+            status: "pending" | "landed" | "ingested" | "failed";
             /** @description Free-form key-value metadata. No fixed keys, no enums. */
             meta?: {
                 [key: string]: string;

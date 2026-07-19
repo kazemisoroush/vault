@@ -48,12 +48,12 @@ const localRunTimeout = 5 * time.Minute
 // LocalEnqueuer runs the check in a goroutine, for the local development server where there is
 // no Lambda to self-invoke.
 type LocalEnqueuer struct {
-	runner *Runner
+	verifier *Verifier
 }
 
-// NewLocalEnqueuer builds an enqueuer over an in-process runner.
-func NewLocalEnqueuer(runner *Runner) *LocalEnqueuer {
-	return &LocalEnqueuer{runner: runner}
+// NewLocalEnqueuer builds an enqueuer over an in-process verifier.
+func NewLocalEnqueuer(verifier *Verifier) *LocalEnqueuer {
+	return &LocalEnqueuer{verifier: verifier}
 }
 
 // Enqueue starts the pipeline in the background. The goroutine gets its own context: the HTTP
@@ -62,8 +62,8 @@ func (e *LocalEnqueuer) Enqueue(_ context.Context, checkID string, ownerID strin
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), localRunTimeout)
 		defer cancel()
-		if err := e.runner.Run(ctx, checkID, ownerID); err != nil {
-			log.Printf("run check %s: %v", checkID, err)
+		if err := e.verifier.Verify(ctx, checkID, ownerID); err != nil {
+			log.Printf("verify check %s: %v", checkID, err)
 		}
 	}()
 	return nil

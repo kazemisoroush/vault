@@ -614,9 +614,14 @@ body {
   background: currentColor;
 }
 
-.badge.ready {
+.badge.ingested {
   color: var(--ok);
   background: var(--ok-soft);
+}
+
+.badge.landed {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 .badge.pending {

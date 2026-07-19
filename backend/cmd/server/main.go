@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
@@ -17,11 +18,10 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/calls"
 	"github.com/kazemisoroush/vault/backend/internal/checks"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
 	"github.com/kazemisoroush/vault/backend/internal/index"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
-	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 func main() {
@@ -38,24 +38,18 @@ func main() {
 	blobs := blob.NewS3Store(s3.NewFromConfig(awsCfg), cfg.Bucket)
 	recorder := calls.NewDynamoCalls(dynamoClient, cfg.CallsTable)
 
-	embedder, err := embed.NewTitanEmbedder(ctx, cfg.BedrockRegion, cfg.EmbedModel, recorder)
-	if err != nil {
-		log.Fatalf("configure embedder: %v", err)
-	}
-	vectorStore, err := vectors.NewS3Vectors(ctx, cfg.BedrockRegion, cfg.VectorBucket, cfg.VectorIndex)
-	if err != nil {
-		log.Fatalf("configure vector store: %v", err)
-	}
+	// Retrieval runs against the managed Knowledge Base by hybrid search, for the agent and the check.
+	searcher := kb.NewBedrockSearcher(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
 
-	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), embedder, vectorStore, idx)
+	answerer := agent.NewQuestionAnswerer(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), searcher, idx)
 
 	// Locally there is no Lambda to self-invoke, so the check pipeline runs in a goroutine.
 	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
 	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
-	runner := checks.NewRunner(checkStore, idx, blobs, embedder, vectorStore, checkModel)
-	enqueuer := checks.NewLocalEnqueuer(runner)
+	verifier := checks.NewVerifier(checkStore, searcher, idx, checkModel)
+	enqueuer := checks.NewLocalEnqueuer(verifier)
 
-	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
+	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}

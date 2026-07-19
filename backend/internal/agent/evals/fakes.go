@@ -5,77 +5,25 @@ package evals
 
 import (
 	"context"
-	"hash/fnv"
-	"math"
-	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/index"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 )
 
-// embedDimension is the width of the toy embedding used to seed and search the fake vector store.
-const embedDimension = 16
-
-// fakeEmbedder turns text into a deterministic bag-of-words vector, so nearest-neighbour search is
-// reproducible without calling a real embedding model.
-type fakeEmbedder struct{}
-
-func (fakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
-	vector := make([]float32, embedDimension)
-	for token := range strings.FieldsSeq(strings.ToLower(text)) {
-		h := fnv.New32a()
-		_, _ = h.Write([]byte(token))
-		vector[h.Sum32()%embedDimension]++
-	}
-	return vector, nil
+// fakeSearcher returns the seeded case files as passages, standing in for hybrid search over the
+// Knowledge Base. The scripted model (offline) or the real model (Bedrock) picks the right file.
+type fakeSearcher struct {
+	passages []kb.Passage
 }
 
-// fakeVectors is an in-memory vector store: one owner-tagged vector per file, queried by cosine.
-type fakeVectors struct {
-	vectors map[string]ownedVector
+func (f *fakeSearcher) add(file domain.File) {
+	f.passages = append(f.passages, kb.Passage{FileID: file.ID, FileName: file.Name, Text: file.SearchText()})
 }
 
-type ownedVector struct {
-	owner  string
-	vector []float32
-}
-
-func newFakeVectors() *fakeVectors { return &fakeVectors{vectors: map[string]ownedVector{}} }
-
-func (f *fakeVectors) Put(_ context.Context, id, ownerID string, vector []float32) error {
-	f.vectors[id] = ownedVector{owner: ownerID, vector: vector}
-	return nil
-}
-
-func (f *fakeVectors) Query(_ context.Context, ownerID string, vector []float32, topK int32) ([]string, error) {
-	type scored struct {
-		id    string
-		score float64
-	}
-	ranked := make([]scored, 0, len(f.vectors))
-	for id, entry := range f.vectors {
-		if entry.owner != ownerID {
-			continue
-		}
-		ranked = append(ranked, scored{id: id, score: cosine(vector, entry.vector)})
-	}
-	sort.Slice(ranked, func(i, j int) bool { return ranked[i].score > ranked[j].score })
-
-	ids := make([]string, 0, len(ranked))
-	for i, r := range ranked {
-		if int32(i) >= topK {
-			break
-		}
-		ids = append(ids, r.id)
-	}
-	return ids, nil
-}
-
-func (f *fakeVectors) Delete(_ context.Context, id string) error {
-	delete(f.vectors, id)
-	return nil
+func (f *fakeSearcher) Search(_ context.Context, _ string, _ int) ([]kb.Passage, error) {
+	return f.passages, nil
 }
 
 // fakeIndex is an in-memory file index scoped by owner, enough to serve get, list, and paging.
@@ -122,21 +70,25 @@ func (f *fakeIndex) List(_ context.Context, ownerID string, limit int32, cursor 
 	return page, next, nil
 }
 
-func (f *fakeIndex) Delete(_ context.Context, id string) error {
-	delete(f.files, id)
+func (f *fakeIndex) ListByStatus(_ context.Context, status string, limit int32) ([]domain.File, error) {
+	page := make([]domain.File, 0, limit)
+	for _, id := range f.order {
+		if file := f.files[id]; file.Status == status && int32(len(page)) < limit {
+			page = append(page, file)
+		}
+	}
+	return page, nil
+}
+
+func (f *fakeIndex) AdvanceStatus(_ context.Context, id string, from string, to string) error {
+	if file, ok := f.files[id]; ok && file.Status == from {
+		file.Status = to
+		f.files[id] = file
+	}
 	return nil
 }
 
-// cosine is the cosine similarity of two equal-length vectors, zero when either has no magnitude.
-func cosine(a, b []float32) float64 {
-	var dot, na, nb float64
-	for i := range a {
-		dot += float64(a[i]) * float64(b[i])
-		na += float64(a[i]) * float64(a[i])
-		nb += float64(b[i]) * float64(b[i])
-	}
-	if na == 0 || nb == 0 {
-		return 0
-	}
-	return dot / (math.Sqrt(na) * math.Sqrt(nb))
+func (f *fakeIndex) Delete(_ context.Context, id string) error {
+	delete(f.files, id)
+	return nil
 }

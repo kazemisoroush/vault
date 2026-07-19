@@ -23,16 +23,16 @@ func (f *fakeClient) Retrieve(_ context.Context, in *bedrockagentruntime.Retriev
 	return &bedrockagentruntime.RetrieveOutput{RetrievalResults: f.results}, nil
 }
 
-func TestRetrieveUsesHybridSearchAndMapsPassages(t *testing.T) {
+func TestSearchUsesHybridSearchAndMapsPassages(t *testing.T) {
 	// Arrange
 	fake := &fakeClient{results: []types.KnowledgeBaseRetrievalResult{
 		{Content: &types.RetrievalResultContent{Text: aws.String("Document No. RA3495037")}, Score: aws.Float64(0.9)},
 		{Content: &types.RetrievalResultContent{Text: aws.String("an unrelated line")}, Score: aws.Float64(0.4)},
 	}}
-	retriever := kb.NewRetriever(fake, "KB123")
+	searcher := kb.NewBedrockSearcher(fake, "KB123")
 
 	// Act
-	got, err := retriever.Retrieve(context.Background(), "what is the passport number", 5)
+	got, err := searcher.Search(context.Background(), "what is the passport number", 5)
 
 	// Assert: passages carry their text and score, in order.
 	require.NoError(t, err)

@@ -10,6 +10,8 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2integrations"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscognito"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
@@ -20,21 +22,15 @@ import (
 	"github.com/cdklabs/cdk-nag-go/cdknag/v2"
 )
 
-// extractModel is the Bedrock Claude inference profile that fills metadata on drop.
-const extractModel = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+// claudeModel is the Bedrock Claude inference profile the ask agent and the check pipeline call.
+const claudeModel = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
-// rerankModel re-ranks the vector shortlist on ask; the same small Claude model as extract.
-const rerankModel = extractModel
+// rerankModel names the model the backend loads for the agent and the check: the same Claude model.
+const rerankModel = claudeModel
 
-// embedModel turns text into a vector for search, on both drop and ask.
+// embedModel is the Knowledge Base's embedding model and embedDimension is its vector width.
 const embedModel = "amazon.titan-embed-text-v2:0"
-
-// vectorBucketName and vectorIndexName name the S3 Vectors store, and embedDimension is Titan v2's width.
-const (
-	vectorBucketName = "vault-vectors"
-	vectorIndexName  = "files"
-	embedDimension   = 1024
-)
+const embedDimension = 1024
 
 // stagingKeyPrefix is where fresh uploads land before ingest hashes them, matching blob.stagingPrefix.
 const stagingKeyPrefix = "uploads/"
@@ -83,6 +79,15 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 			Name: jsii.String("id"),
 			Type: awsdynamodb.AttributeType_STRING,
 		},
+		// The status index lets the Knowledge Base syncer query the landed files without scanning
+		// the whole table. It projects every attribute so the syncer advances a record with one write.
+		GlobalSecondaryIndexes: &[]*awsdynamodb.GlobalSecondaryIndexPropsV2{
+			{
+				IndexName:      jsii.String("status-index"),
+				PartitionKey:   &awsdynamodb.Attribute{Name: jsii.String("status"), Type: awsdynamodb.AttributeType_STRING},
+				ProjectionType: awsdynamodb.ProjectionType_ALL,
+			},
+		},
 	})
 
 	// callsTable holds the LLM call trace, one partition keyed by time, expired by TTL.
@@ -101,30 +106,9 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		},
 	})
 
-	// The managed retrieval foundation: a Bedrock Knowledge Base over the files bucket, backed by an
-	// OpenSearch Serverless NextGen collection. It stands alongside the existing S3 Vectors path
-	// until the retrieval cutover; no app wiring changes here.
-	newKnowledgeBase(stack, bucket)
-
-	// The S3 Vectors bucket and index hold one embedding per file, keyed by file id, for semantic
-	// search. CloudFormation supports these natively, so they are plain L1 resources.
-	vectorBucket := awscdk.NewCfnResource(stack, jsii.String("VectorBucket"), &awscdk.CfnResourceProps{
-		Type: jsii.String("AWS::S3Vectors::VectorBucket"),
-		Properties: &map[string]interface{}{
-			"VectorBucketName": jsii.String(vectorBucketName),
-		},
-	})
-	vectorIndex := awscdk.NewCfnResource(stack, jsii.String("VectorIndex"), &awscdk.CfnResourceProps{
-		Type: jsii.String("AWS::S3Vectors::Index"),
-		Properties: &map[string]interface{}{
-			"VectorBucketName": jsii.String(vectorBucketName),
-			"IndexName":        jsii.String(vectorIndexName),
-			"DataType":         jsii.String("float32"),
-			"Dimension":        jsii.Number(embedDimension),
-			"DistanceMetric":   jsii.String("cosine"),
-		},
-	})
-	vectorIndex.AddDependency(vectorBucket)
+	// The managed Bedrock Knowledge Base over the files bucket now serves both retrieval (hybrid
+	// search) and ingestion (the scheduled syncer runs its jobs). It is the only retrieval infra.
+	knowledge := newKnowledgeBase(stack, bucket)
 
 	pool := awscognito.NewUserPool(stack, jsii.String("Users"), &awscognito.UserPoolProps{
 		SelfSignUpEnabled: jsii.Bool(false),
@@ -156,18 +140,16 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		// plus an inner file at once, so the default 128 MB is not enough.
 		MemorySize: jsii.Number(1024),
 		Environment: &map[string]*string{
-			"VAULT_TABLE":          table.TableName(),
-			"VAULT_BUCKET":         bucket.BucketName(),
-			"VAULT_JWT_ISSUER":     pool.UserPoolProviderUrl(),
-			"VAULT_JWT_CLIENT_ID":  client.UserPoolClientId(),
-			"VAULT_BEDROCK_REGION": stack.Region(),
-			"VAULT_EXTRACT_MODEL":  jsii.String(extractModel),
-			"VAULT_RERANK_MODEL":   jsii.String(rerankModel),
-			"VAULT_EMBED_MODEL":    jsii.String(embedModel),
-			"VAULT_VECTOR_BUCKET":  jsii.String(vectorBucketName),
-			"VAULT_VECTOR_INDEX":   jsii.String(vectorIndexName),
-			"VAULT_CALLS_TABLE":    callsTable.TableName(),
-			"VAULT_CHECKS_TABLE":   checksTable.TableName(),
+			"TABLE":                         table.TableName(),
+			"BUCKET":                        bucket.BucketName(),
+			"JWT_ISSUER":                    pool.UserPoolProviderUrl(),
+			"JWT_CLIENT_ID":                 client.UserPoolClientId(),
+			"BEDROCK_REGION":                stack.Region(),
+			"RERANK_MODEL":                  jsii.String(rerankModel),
+			"KNOWLEDGE_BASE_ID":             knowledge.id,
+			"KNOWLEDGE_BASE_DATA_SOURCE_ID": knowledge.dataSourceID,
+			"CALLS_TABLE":                   callsTable.TableName(),
+			"CHECKS_TABLE":                  checksTable.TableName(),
 		},
 	})
 
@@ -189,27 +171,24 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Actions: jsii.Strings("bedrock:InvokeModel"),
 		Resources: jsii.Strings(
 			"arn:aws:bedrock:*::foundation-model/anthropic.*",
-			"arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
 			"arn:aws:bedrock:*:"+*stack.Account()+":inference-profile/*",
 		),
 	}))
 
-	// The index and its parent bucket back semantic search: read on ask, write on drop, delete on remove.
-	vectorArn := "arn:aws:s3vectors:" + *stack.Region() + ":" + *stack.Account() + ":bucket/" + vectorBucketName
+	// The Knowledge Base backs both retrieval (the agent and check query it by hybrid search) and
+	// ingestion (the scheduled syncer starts and polls ingestion jobs on the data source).
 	fn.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions: jsii.Strings(
-			"s3vectors:PutVectors",
-			"s3vectors:QueryVectors",
-			// GetVectors is required because an owner-filtered query reads vector metadata.
-			"s3vectors:GetVectors",
-			"s3vectors:DeleteVectors",
+			"bedrock:Retrieve",
+			"bedrock:StartIngestionJob",
+			"bedrock:GetIngestionJob",
 		),
-		Resources: jsii.Strings(vectorArn, vectorArn+"/index/"+vectorIndexName),
+		Resources: jsii.Strings("arn:aws:bedrock:" + *stack.Region() + ":" + *stack.Account() + ":knowledge-base/" + *knowledge.id),
 	}))
 
-	// Ingest runs as an async invocation from the S3 event. When extraction is throttled the
-	// handler returns an error on purpose, so let Lambda redrive the event a few times over a
-	// bounded window rather than losing the file to a terminal failure.
+	// Ingest runs as an async invocation from the S3 event. A transient failure, such as the
+	// metadata sidecar write, returns an error on purpose, so let Lambda redrive the event a few
+	// times over a bounded window rather than losing the file to a terminal failure.
 	fn.ConfigureAsyncInvoke(&awslambda.EventInvokeConfigOptions{
 		RetryAttempts: jsii.Number(2),
 		MaxEventAge:   awscdk.Duration_Minutes(jsii.Number(15)),
@@ -221,6 +200,13 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		awss3notifications.NewLambdaDestination(fn),
 		&awss3.NotificationKeyFilter{Prefix: jsii.String(stagingKeyPrefix)},
 	)
+
+	// A schedule drives the Knowledge Base sync: the syncer advances landed files to ingested a
+	// short while after they land, running at most one ingestion job at a time.
+	awsevents.NewRule(stack, jsii.String("KbSyncSchedule"), &awsevents.RuleProps{
+		Schedule: awsevents.Schedule_Rate(awscdk.Duration_Minutes(jsii.Number(2))),
+		Targets:  &[]awsevents.IRuleTarget{awseventstargets.NewLambdaFunction(fn, nil)},
+	})
 
 	api := awsapigatewayv2.NewHttpApi(stack, jsii.String("HttpApi"), &awsapigatewayv2.HttpApiProps{
 		CorsPreflight: &awsapigatewayv2.CorsPreflightOptions{

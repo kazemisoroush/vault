@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/kazemisoroush/vault/backend/internal/domain"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/llm"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
@@ -35,65 +35,74 @@ func (m *scriptedModel) Converse(ctx context.Context, c llm.Conversation) (strin
 	return m.final, nil
 }
 
-func newAgent(t *testing.T, model Converser) (*Agent, *mocks.MockEmbedder, *mocks.MockVectorStore, *mocks.MockIndex) {
+// fakeSearcher returns fixed passages, or an error, standing in for hybrid search over the KB.
+type fakeSearcher struct {
+	passages []kb.Passage
+	err      error
+}
+
+func (f fakeSearcher) Search(_ context.Context, _ string, _ int) ([]kb.Passage, error) {
+	return f.passages, f.err
+}
+
+func newAnswerer(t *testing.T, model Converser, s kb.Searcher) (*QuestionAnswerer, *mocks.MockIndex) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-	embedder := mocks.NewMockEmbedder(ctrl)
-	store := mocks.NewMockVectorStore(ctrl)
 	idx := mocks.NewMockIndex(ctrl)
-	return NewAgent(model, embedder, store, idx), embedder, store, idx
+	return NewQuestionAnswerer(model, s, idx), idx
 }
 
 func TestAnswerRunsSearchAndReturnsCitedFiles(t *testing.T) {
-	// Arrange: the model searches by meaning, then answers citing one file.
+	// Arrange: the model searches, then answers citing one file.
 	model := &scriptedModel{
 		calls: []llm.ToolCall{{Name: toolSearchByMeaning, Input: []byte(`{"query":"fuel","limit":20}`)}},
 		final: `{"answer":"your last fill was at Shell","fileIds":["a"]}`,
 	}
-	a, embedder, store, idx := newAgent(t, model)
-	vec := []float32{0.1, 0.2}
-	fileA := domain.File{ID: "a", OwnerID: "alice", Name: "petrol", Key: "files/a"}
-	fileB := domain.File{ID: "b", OwnerID: "alice", Name: "ticket", Key: "files/b"}
-
-	embedder.EXPECT().Embed(gomock.Any(), "fuel").Return(vec, nil)
-	store.EXPECT().Query(gomock.Any(), "alice", vec, int32(20)).Return([]string{"a", "b"}, nil)
-	idx.EXPECT().Get(gomock.Any(), "a").Return(fileA, nil).AnyTimes()
-	idx.EXPECT().Get(gomock.Any(), "b").Return(fileB, nil).AnyTimes()
+	r := fakeSearcher{passages: []kb.Passage{
+		{FileID: "a", FileName: "petrol", Text: "Shell fuel receipt"},
+		{FileID: "b", FileName: "ticket", Text: "a flight ticket"},
+	}}
+	a, idx := newAnswerer(t, model, r)
+	idx.EXPECT().Get(gomock.Any(), "a").Return(domain.File{ID: "a", OwnerID: "alice", Name: "petrol", Key: "files/a"}, nil).AnyTimes()
+	idx.EXPECT().Get(gomock.Any(), "b").Return(domain.File{ID: "b", OwnerID: "alice", Name: "ticket", Key: "files/b"}, nil).AnyTimes()
 
 	// Act
 	result, err := a.Answer(context.Background(), "alice", "where did I last buy fuel")
 
-	// Assert: the answer and the one cited file come back, and the tool saw both nearest files.
+	// Assert: the answer and the one cited file come back, and the search returned both passages
+	// because both belong to the caller.
 	require.NoError(t, err)
 	assert.Equal(t, "your last fill was at Shell", result.Text)
 	require.Len(t, result.Files, 1)
 	assert.Equal(t, "a", result.Files[0].ID)
-	assert.Contains(t, model.results[0], `"id":"a"`)
-	assert.Contains(t, model.results[0], `"id":"b"`)
+	assert.Contains(t, model.results[0], `"fileId":"a"`)
+	assert.Contains(t, model.results[0], `"fileId":"b"`)
 }
 
-func TestAnswerFindByFactsFiltersByField(t *testing.T) {
-	// Arrange: the model filters by a metadata value.
+func TestSearchDropsAForeignOwnerPassage(t *testing.T) {
+	// Arrange: retrieval returns two passages, but only one file belongs to the caller. The
+	// managed Knowledge Base is shared, so the foreign passage must be scoped out before the
+	// model sees it.
 	model := &scriptedModel{
-		calls: []llm.ToolCall{{Name: toolFindByFacts, Input: []byte(`{"contains":[{"field":"vendor","value":"shell"}]}`)}},
-		final: `{"answer":"","fileIds":["shell"]}`,
+		calls: []llm.ToolCall{{Name: toolSearchByMeaning, Input: []byte(`{"query":"deposit"}`)}},
+		final: `{"answer":"done","fileIds":[]}`,
 	}
-	a, _, _, idx := newAgent(t, model)
-	shell := domain.File{ID: "shell", OwnerID: "alice", Name: "s", Key: "files/shell", Meta: map[string]string{"vendor": "Shell"}}
-	coles := domain.File{ID: "coles", OwnerID: "alice", Name: "c", Key: "files/coles", Meta: map[string]string{"vendor": "Coles"}}
-
-	idx.EXPECT().List(gomock.Any(), "alice", listPageSize, "").Return([]domain.File{shell, coles}, "", nil)
-	idx.EXPECT().Get(gomock.Any(), "shell").Return(shell, nil)
+	r := fakeSearcher{passages: []kb.Passage{
+		{FileID: "mine", FileName: "mine", Text: "my own deposit note"},
+		{FileID: "theirs", FileName: "theirs", Text: "another owner's deposit note"},
+	}}
+	a, idx := newAnswerer(t, model, r)
+	idx.EXPECT().Get(gomock.Any(), "mine").Return(domain.File{ID: "mine", OwnerID: "alice"}, nil).AnyTimes()
+	idx.EXPECT().Get(gomock.Any(), "theirs").Return(domain.File{ID: "theirs", OwnerID: "mallory"}, nil).AnyTimes()
 
 	// Act
-	result, err := a.Answer(context.Background(), "alice", "shell receipts")
+	_, err := a.Answer(context.Background(), "alice", "show my deposit note")
 
-	// Assert: only the Shell file passed the filter and it is the cited file.
+	// Assert: only the caller's passage reaches the model.
 	require.NoError(t, err)
-	assert.Contains(t, model.results[0], `"id":"shell"`)
-	assert.NotContains(t, model.results[0], `"id":"coles"`)
-	require.Len(t, result.Files, 1)
-	assert.Equal(t, "shell", result.Files[0].ID)
+	assert.Contains(t, model.results[0], `"fileId":"mine"`)
+	assert.NotContains(t, model.results[0], `"fileId":"theirs"`)
+	assert.NotContains(t, model.results[0], "another owner")
 }
 
 func TestAnswerGetFileHidesAForeignOwner(t *testing.T) {
@@ -102,7 +111,7 @@ func TestAnswerGetFileHidesAForeignOwner(t *testing.T) {
 		calls: []llm.ToolCall{{Name: toolGetFile, Input: []byte(`{"id":"secret"}`)}},
 		final: `{"answer":"I could not find that","fileIds":[]}`,
 	}
-	a, _, _, idx := newAgent(t, model)
+	a, idx := newAnswerer(t, model, fakeSearcher{})
 	idx.EXPECT().Get(gomock.Any(), "secret").Return(domain.File{ID: "secret", OwnerID: "mallory"}, nil)
 
 	// Act
@@ -117,7 +126,7 @@ func TestAnswerGetFileHidesAForeignOwner(t *testing.T) {
 func TestAnswerDropsACitedFileTheCallerDoesNotOwn(t *testing.T) {
 	// Arrange: the model cites an id whose record belongs to another owner.
 	model := &scriptedModel{final: `{"answer":"here","fileIds":["foreign"]}`}
-	a, _, _, idx := newAgent(t, model)
+	a, idx := newAnswerer(t, model, fakeSearcher{})
 	idx.EXPECT().Get(gomock.Any(), "foreign").Return(domain.File{ID: "foreign", OwnerID: "bob"}, nil)
 
 	// Act
@@ -130,10 +139,9 @@ func TestAnswerDropsACitedFileTheCallerDoesNotOwn(t *testing.T) {
 }
 
 func TestAnswerPropagatesAToolError(t *testing.T) {
-	// Arrange: the search embedding fails, which the executor returns as an error.
+	// Arrange: retrieval fails, which the executor returns as an error.
 	model := &scriptedModel{calls: []llm.ToolCall{{Name: toolSearchByMeaning, Input: []byte(`{"query":"x"}`)}}}
-	a, embedder, _, _ := newAgent(t, model)
-	embedder.EXPECT().Embed(gomock.Any(), "x").Return(nil, errors.New("bedrock down"))
+	a, _ := newAnswerer(t, model, fakeSearcher{err: errors.New("bedrock down")})
 
 	// Act
 	_, err := a.Answer(context.Background(), "alice", "x")
@@ -149,36 +157,4 @@ func TestParseFinalFallsBackToPlainText(t *testing.T) {
 	// Assert: the whole reply becomes the answer with no cited ids.
 	assert.Equal(t, "I could not format that", answer)
 	assert.Nil(t, ids)
-}
-
-func TestFindByFactsRespectsTheTimeBound(t *testing.T) {
-	// Arrange: two files, one before and one after the since date.
-	jan := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
-	mar := time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC)
-	model := &scriptedModel{
-		calls: []llm.ToolCall{{Name: toolFindByFacts, Input: []byte(`{"since":"2026-02-01T00:00:00Z"}`)}},
-		final: `{"answer":"","fileIds":[]}`,
-	}
-	a, _, _, idx := newAgent(t, model)
-	old := domain.File{ID: "old", OwnerID: "alice", CreatedAt: jan}
-	recent := domain.File{ID: "recent", OwnerID: "alice", CreatedAt: mar}
-	idx.EXPECT().List(gomock.Any(), "alice", listPageSize, "").Return([]domain.File{old, recent}, "", nil)
-
-	// Act
-	_, err := a.Answer(context.Background(), "alice", "recent files")
-
-	// Assert: only the file created after the since date is returned by the tool.
-	require.NoError(t, err)
-	assert.Contains(t, model.results[0], `"id":"recent"`)
-	assert.NotContains(t, model.results[0], `"id":"old"`)
-}
-
-func TestParseDateAcceptsRFC3339AndPlainDate(t *testing.T) {
-	// Arrange + Act + Assert: both a timestamp and a plain date parse to the same instant, and a
-	// bad value is treated as no bound.
-	want := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
-	assert.Equal(t, want, parseDate("2026-02-01T00:00:00Z"))
-	assert.Equal(t, want, parseDate("2026-02-01"))
-	assert.True(t, parseDate("not a date").IsZero())
-	assert.True(t, parseDate("").IsZero())
 }

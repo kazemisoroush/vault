@@ -7,11 +7,14 @@ import (
 	"time"
 )
 
-// Status values describe where a file is in the extraction lifecycle.
+// Status values describe where a file is in the ingestion lifecycle: pending while it is staged,
+// landed once it is stored and queued for the Knowledge Base, ingested once the Knowledge Base has
+// indexed it and it is searchable, and failed on a terminal error.
 const (
-	StatusPending = "pending"
-	StatusReady   = "ready"
-	StatusFailed  = "failed"
+	StatusPending  = "pending"
+	StatusLanded   = "landed"
+	StatusIngested = "ingested"
+	StatusFailed   = "failed"
 )
 
 // File is one stored blob and its free-form metadata.

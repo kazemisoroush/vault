@@ -41,6 +41,20 @@ func (m *MockIndex) EXPECT() *MockIndexMockRecorder {
 	return m.recorder
 }
 
+// AdvanceStatus mocks base method.
+func (m *MockIndex) AdvanceStatus(ctx context.Context, id, from, to string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdvanceStatus", ctx, id, from, to)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AdvanceStatus indicates an expected call of AdvanceStatus.
+func (mr *MockIndexMockRecorder) AdvanceStatus(ctx, id, from, to any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvanceStatus", reflect.TypeOf((*MockIndex)(nil).AdvanceStatus), ctx, id, from, to)
+}
+
 // Delete mocks base method.
 func (m *MockIndex) Delete(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
@@ -84,6 +98,21 @@ func (m *MockIndex) List(ctx context.Context, ownerID string, limit int32, curso
 func (mr *MockIndexMockRecorder) List(ctx, ownerID, limit, cursor any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockIndex)(nil).List), ctx, ownerID, limit, cursor)
+}
+
+// ListByStatus mocks base method.
+func (m *MockIndex) ListByStatus(ctx context.Context, status string, limit int32) ([]domain.File, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListByStatus", ctx, status, limit)
+	ret0, _ := ret[0].([]domain.File)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListByStatus indicates an expected call of ListByStatus.
+func (mr *MockIndexMockRecorder) ListByStatus(ctx, status, limit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByStatus", reflect.TypeOf((*MockIndex)(nil).ListByStatus), ctx, status, limit)
 }
 
 // Put mocks base method.

@@ -8,6 +8,8 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockagent"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	lambdasvc "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -19,14 +21,12 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/calls"
 	"github.com/kazemisoroush/vault/backend/internal/checks"
 	appconfig "github.com/kazemisoroush/vault/backend/internal/config"
-	"github.com/kazemisoroush/vault/backend/internal/embed"
-	"github.com/kazemisoroush/vault/backend/internal/extract"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/llm"
+	"github.com/kazemisoroush/vault/backend/internal/router"
 	"github.com/kazemisoroush/vault/backend/internal/telemetry"
-	"github.com/kazemisoroush/vault/backend/internal/transport"
-	"github.com/kazemisoroush/vault/backend/internal/vectors"
 )
 
 func main() {
@@ -43,36 +43,28 @@ func main() {
 	blobs := blob.NewS3Store(s3.NewFromConfig(awsCfg), cfg.Bucket)
 	recorder := calls.NewDynamoCalls(dynamoClient, cfg.CallsTable)
 
-	embedder, err := embed.NewTitanEmbedder(ctx, cfg.BedrockRegion, cfg.EmbedModel, recorder)
-	if err != nil {
-		log.Fatalf("configure embedder: %v", err)
-	}
-	vectorStore, err := vectors.NewS3Vectors(ctx, cfg.BedrockRegion, cfg.VectorBucket, cfg.VectorIndex)
-	if err != nil {
-		log.Fatalf("configure vector store: %v", err)
-	}
+	// Retrieval runs against the managed Knowledge Base by hybrid search, for both the agent and the check.
+	searcher := kb.NewBedrockSearcher(bedrockagentruntime.NewFromConfig(awsCfg), cfg.KnowledgeBaseID)
 
-	answerer := agent.NewAgent(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), embedder, vectorStore, idx)
+	answerer := agent.NewQuestionAnswerer(llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, agent.ModelOp, recorder), searcher, idx)
 
 	// The check pipeline runs as an async self-invocation, so the API reply is immediate and the
 	// pipeline gets the full function timeout. AWS_LAMBDA_FUNCTION_NAME is set by the runtime.
 	checkStore := checks.NewDynamoChecks(dynamoClient, cfg.ChecksTable)
 	checkModel := llm.NewModel(cfg.BedrockRegion, cfg.RerankModel, checks.ModelOp, recorder)
-	runner := checks.NewRunner(checkStore, idx, blobs, embedder, vectorStore, checkModel)
+	verifier := checks.NewVerifier(checkStore, searcher, idx, checkModel)
 	enqueuer := checks.NewLambdaEnqueuer(lambdasvc.NewFromConfig(awsCfg), cfg.FunctionName)
 
-	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, vectorStore, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
+	apiHandler, err := api.NewHandler(ctx, cfg, idx, blobs, answerer, checkStore, enqueuer, recorder, telemetry.NewEMFEmitter(os.Stdout))
 	if err != nil {
 		log.Fatalf("configure api: %v", err)
 	}
 	proxy := httpadapter.NewV2(apiHandler).ProxyWithContext
 
-	extractor, err := extract.NewClaudeExtractor(ctx, cfg.BedrockRegion, cfg.ExtractModel, recorder)
-	if err != nil {
-		log.Fatalf("configure extractor: %v", err)
-	}
-	ingester := ingest.NewHandler(idx, blobs, extractor, embedder, vectorStore)
+	ingester := ingest.NewHandler(idx, blobs)
+	indexer := kb.NewBedrockIndexer(bedrockagent.NewFromConfig(awsCfg), cfg.KnowledgeBaseID, cfg.KnowledgeBaseDataSourceID)
+	syncer := ingest.NewSyncer(indexer, idx)
 
-	adapter := transport.NewTransport(proxy, ingester, runner)
-	lambda.Start(adapter.Handle)
+	adapter := router.NewEventRouter(proxy, ingester, syncer, verifier)
+	lambda.Start(adapter.Route)
 }

@@ -22,10 +22,10 @@ const (
 	// evalModelOp tags the eval's model calls on the trace.
 	evalModelOp = "eval"
 	// envEvalBedrock gates the Bedrock eval; it runs only when this is set.
-	envEvalBedrock = "VAULT_EVAL_BEDROCK"
+	envEvalBedrock = "EVAL_BEDROCK"
 	// envEvalRegion and envEvalModel override the Bedrock region and model.
-	envEvalRegion = "VAULT_BEDROCK_REGION"
-	envEvalModel  = "VAULT_EVAL_MODEL"
+	envEvalRegion = "BEDROCK_REGION"
+	envEvalModel  = "EVAL_MODEL"
 	// defaultEvalRegion and defaultEvalModel are used when the overrides are unset.
 	defaultEvalRegion = "us-east-1"
 	defaultEvalModel  = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -94,8 +94,9 @@ func LoadCases() ([]Case, error) {
 	return cases, nil
 }
 
-// seed loads a case's files into the fake stores, mirroring what ingest does on drop.
-func seed(idx *fakeIndex, vectors *fakeVectors, embedder fakeEmbedder, c Case) error {
+// seed loads a case's files into the fake index and searcher, mirroring what ingest does on drop:
+// the file is registered and made retrievable.
+func seed(idx *fakeIndex, searcher *fakeSearcher, c Case) error {
 	ctx := context.Background()
 	for _, cf := range c.Files {
 		file := domain.File{
@@ -109,13 +110,7 @@ func seed(idx *fakeIndex, vectors *fakeVectors, embedder fakeEmbedder, c Case) e
 		if err := idx.Put(ctx, file); err != nil {
 			return fmt.Errorf("index case file %q: %w", cf.ID, err)
 		}
-		vector, err := embedder.Embed(ctx, file.SearchText())
-		if err != nil {
-			return fmt.Errorf("embed case file %q: %w", cf.ID, err)
-		}
-		if err := vectors.Put(ctx, file.ID, c.Owner, vector); err != nil {
-			return fmt.Errorf("store vector for case file %q: %w", cf.ID, err)
-		}
+		searcher.add(file)
 	}
 	return nil
 }

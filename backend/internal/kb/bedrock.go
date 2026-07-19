@@ -1,4 +1,5 @@
-// Package kb retrieves passages from the managed Bedrock Knowledge Base by hybrid search.
+// Package kb searches the managed Bedrock Knowledge Base by hybrid search for the passages
+// relevant to a query.
 package kb
 
 import (
@@ -7,32 +8,24 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime"
-	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime/types"
 )
 
-// Metadata keys the ingestion side stamps on each document and the retriever reads back, so a
-// retrieved passage can be tied to the file it came from.
-const (
-	MetaFileID   = "fileId"
-	MetaFileName = "fileName"
-)
-
-// client is the slice of the Bedrock agent-runtime API the Retriever uses, kept small to fake in tests.
+// client is the slice of the Bedrock agent-runtime API the BedrockSearcher uses, kept small to fake in tests.
 type client interface {
 	Retrieve(ctx context.Context, in *bedrockagentruntime.RetrieveInput, optFns ...func(*bedrockagentruntime.Options)) (*bedrockagentruntime.RetrieveOutput, error)
 }
 
-// Retriever finds passages in the Knowledge Base by hybrid search, combining vector similarity with
+// BedrockSearcher finds passages in the Knowledge Base by hybrid search, combining vector similarity with
 // keyword (BM25) scoring, so an exact token such as a passport number ranks as well as a paraphrase.
-type Retriever struct {
+type BedrockSearcher struct {
 	client client
 	kbID   string
 }
 
-// NewRetriever builds a Retriever over a Knowledge Base id.
-func NewRetriever(client client, kbID string) *Retriever {
-	return &Retriever{client: client, kbID: kbID}
+// NewBedrockSearcher builds a BedrockSearcher over a Knowledge Base id.
+func NewBedrockSearcher(client client, kbID string) *BedrockSearcher {
+	return &BedrockSearcher{client: client, kbID: kbID}
 }
 
 // Passage is one retrieved chunk: its text, the file it came from (from the document metadata the
@@ -44,10 +37,10 @@ type Passage struct {
 	Score    float64
 }
 
-// Retrieve returns the passages most relevant to the query by hybrid search, at most limit of them.
-func (r *Retriever) Retrieve(ctx context.Context, query string, limit int) ([]Passage, error) {
-	out, err := r.client.Retrieve(ctx, &bedrockagentruntime.RetrieveInput{
-		KnowledgeBaseId: aws.String(r.kbID),
+// Search returns the passages most relevant to the query by hybrid search, at most limit of them.
+func (s *BedrockSearcher) Search(ctx context.Context, query string, limit int) ([]Passage, error) {
+	out, err := s.client.Retrieve(ctx, &bedrockagentruntime.RetrieveInput{
+		KnowledgeBaseId: aws.String(s.kbID),
 		RetrievalQuery:  &types.KnowledgeBaseQuery{Text: aws.String(query)},
 		RetrievalConfiguration: &types.KnowledgeBaseRetrievalConfiguration{
 			VectorSearchConfiguration: &types.KnowledgeBaseVectorSearchConfiguration{
@@ -57,7 +50,7 @@ func (r *Retriever) Retrieve(ctx context.Context, query string, limit int) ([]Pa
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("kb retrieve: %w", err)
+		return nil, fmt.Errorf("kb search: %w", err)
 	}
 
 	passages := make([]Passage, 0, len(out.RetrievalResults))
@@ -75,18 +68,4 @@ func (r *Retriever) Retrieve(ctx context.Context, query string, limit int) ([]Pa
 		passages = append(passages, passage)
 	}
 	return passages, nil
-}
-
-// metaString reads a string metadata value the ingestion side stamped, or "" when it is absent or
-// not a string.
-func metaString(meta map[string]document.Interface, key string) string {
-	doc, ok := meta[key]
-	if !ok {
-		return ""
-	}
-	var value string
-	if err := doc.UnmarshalSmithyDocument(&value); err != nil {
-		return ""
-	}
-	return value
 }
