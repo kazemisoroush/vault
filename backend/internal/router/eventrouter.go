@@ -24,8 +24,9 @@ type KBSyncer interface {
 	Sync(ctx context.Context) error
 }
 
-// EventRouter routes an S3 event to ingestion, a scheduled event to the Knowledge Base syncer, a
-// check task to the check verifier, and every other event to the HTTP proxy.
+// EventRouter routes a queued upload notification (an SQS message wrapping an S3 event) or a direct
+// S3 event to ingestion, a scheduled event to the Knowledge Base syncer, a check task to the check
+// verifier, and every other event to the HTTP proxy.
 type EventRouter struct {
 	proxy    Proxy
 	ingester Ingester
@@ -107,11 +108,14 @@ type s3EventProbeRecord struct {
 	EventSource string `json:"eventSource"`
 }
 
-// sqsEventProbe sniffs the event source of the first record.
+// sqsEventProbe sniffs just enough of a raw event to detect an SQS event.
 type sqsEventProbe struct {
-	Records []struct {
-		EventSource string `json:"eventSource"`
-	} `json:"Records"`
+	Records []sqsEventProbeRecord `json:"Records"`
+}
+
+// sqsEventProbeRecord carries one record's event source.
+type sqsEventProbeRecord struct {
+	EventSource string `json:"eventSource"`
 }
 
 // isSQSEvent reports whether the raw event is an SQS event, which is how upload notifications reach

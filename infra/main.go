@@ -221,7 +221,7 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 	)
 
 	// Drain the queue a couple of messages at a time, so at most a couple of transcriptions run at
-	// once and stay under the Bedrock rate limit; one S3 event per message keeps the mapping simple.
+	// once and stay under the Bedrock rate limit. One S3 event per message keeps the mapping simple.
 	fn.AddEventSource(awslambdaeventsources.NewSqsEventSource(ingestQueue, &awslambdaeventsources.SqsEventSourceProps{
 		BatchSize:      jsii.Number(1),
 		MaxConcurrency: jsii.Number(2),
