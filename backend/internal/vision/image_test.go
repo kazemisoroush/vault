@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image"
 	"image/png"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,10 +39,31 @@ func TestScaledBoundsNeverRoundsToEmpty(t *testing.T) {
 	assert.GreaterOrEqual(t, got.Dy(), 1)
 }
 
-func TestShrinkImageLeavesASmallImageAlone(t *testing.T) {
-	// A small PNG is under the byte limit, so shrinkImage declines and the caller sends the original.
+func TestToJPEGNormalizesAPNG(t *testing.T) {
+	// A PNG is decoded and re-encoded as JPEG, so the model always receives a format it can read.
 	var buf bytes.Buffer
-	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 16, 16))))
-	_, ok := shrinkImage(buf.Bytes())
+	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 32, 24))))
+
+	jpg, ok := toJPEG(buf.Bytes())
+	require.True(t, ok)
+	_, format, err := image.DecodeConfig(bytes.NewReader(jpg))
+	require.NoError(t, err)
+	assert.Equal(t, "jpeg", format)
+}
+
+func TestToJPEGDeclinesNonImageBytes(t *testing.T) {
+	_, ok := toJPEG([]byte("this is not an image"))
 	assert.False(t, ok)
+}
+
+func TestDetectContentTypeCorrectsAMislabelledImage(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 8, 8))))
+
+	// A real declared type is trusted as-is.
+	assert.Equal(t, "image/jpeg", DetectContentType("image/jpeg", buf.Bytes()))
+	// A browser that uploads an image as octet-stream is corrected by sniffing the bytes.
+	assert.Equal(t, "image/png", DetectContentType("application/octet-stream", buf.Bytes()))
+	// Non-image bytes stay generic, so they are not routed to transcription.
+	assert.False(t, strings.HasPrefix(DetectContentType("application/octet-stream", []byte("plain text")), "image/"))
 }

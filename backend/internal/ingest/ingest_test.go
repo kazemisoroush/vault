@@ -1,11 +1,14 @@
 package ingest_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -88,6 +91,43 @@ func TestSettleTranscribesAnImageIntoTheKBSource(t *testing.T) {
 	require.NoError(t, json.Unmarshal(metaBody, &meta))
 	assert.Equal(t, hash, meta.MetadataAttributes["fileId"])
 	assert.Equal(t, "passport.jpg", meta.MetadataAttributes["fileName"])
+}
+
+func TestSettleSniffsAMislabelledImageAndTranscribesIt(t *testing.T) {
+	// Arrange: a real image uploaded as application/octet-stream, as browsers do for HEIC. It must
+	// be detected as an image and transcribed, not copied straight to the KB where it would fail.
+	ctrl := gomock.NewController(t)
+	idx := mocks.NewMockIndex(ctrl)
+	blobs := mocks.NewMockStore(ctrl)
+	transcriber := mocks.NewMockTranscriber(ctrl)
+
+	var pngBuf bytes.Buffer
+	require.NoError(t, png.Encode(&pngBuf, image.NewRGBA(image.Rect(0, 0, 8, 8))))
+	content := pngBuf.Bytes()
+	hash := hashOf(content)
+	staging := "uploads/upl-1"
+	pending := domain.File{ID: "upl-1", OwnerID: "alice", Key: staging, Name: "IMG.HEIC", ContentType: "application/octet-stream", Status: domain.StatusPending}
+
+	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(pending, nil)
+	blobs.EXPECT().Get(gomock.Any(), staging).Return(content, "application/octet-stream", nil)
+	blobs.EXPECT().Copy(gomock.Any(), staging, "files/"+hash).Return(nil)
+	// Detected as an image, so it is transcribed (the sniffed type here is image/png) not copied.
+	transcriber.EXPECT().Transcribe(gomock.Any(), content, "image/png").Return("some text", nil)
+	blobs.EXPECT().Put(gomock.Any(), "kb/"+hash, "text/plain; charset=utf-8", []byte("some text")).Return(nil)
+	blobs.EXPECT().Put(gomock.Any(), "kb/"+hash+".metadata.json", "application/json", gomock.Any()).Return(nil)
+	var saved domain.File
+	idx.EXPECT().Put(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, f domain.File) error {
+		saved = f
+		return nil
+	})
+	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
+	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
+
+	h := ingest.NewHandler(idx, blobs, transcriber)
+
+	// Act & Assert: routed to transcription, and the record's content type is corrected.
+	require.NoError(t, h.Handle(context.Background(), s3Event(staging)))
+	assert.Equal(t, "image/png", saved.ContentType)
 }
 
 func TestSettleCopiesAParseableDocumentAsTheKBSource(t *testing.T) {

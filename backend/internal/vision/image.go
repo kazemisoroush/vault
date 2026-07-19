@@ -6,8 +6,10 @@ import (
 	_ "image/gif" // register the GIF decoder for image.Decode
 	"image/jpeg"
 	_ "image/png" // register the PNG decoder for image.Decode
+	"net/http"
 	"strings"
 
+	_ "github.com/gen2brain/heic" // register the HEIC decoder (cgo-free, via wazero) for image.Decode
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/kazemisoroush/vault/backend/internal/llm"
@@ -27,31 +29,41 @@ func Supported(contentType string) bool {
 	return strings.HasPrefix(contentType, "image/") || contentType == "application/pdf"
 }
 
-// fileBlock returns the model content part for a file: an image (downscaled if oversized) or a PDF.
+// DetectContentType returns the file's real media type. A browser often uploads a format it does not
+// recognise, such as HEIC, as application/octet-stream, so when the declared type is generic the
+// bytes are sniffed: first as an image (which recognises HEIC by its magic), then by content.
+func DetectContentType(declared string, content []byte) string {
+	if declared != "" && declared != "application/octet-stream" {
+		return declared
+	}
+	if _, format, err := image.DecodeConfig(bytes.NewReader(content)); err == nil && format != "" {
+		return "image/" + format
+	}
+	return http.DetectContentType(content)
+}
+
+// fileBlock returns the model content part for a file: an image (normalised to JPEG) or a PDF.
 func fileBlock(content []byte, contentType string) llm.Part {
 	if strings.HasPrefix(contentType, "image/") {
-		return imageBlock(content, contentType)
+		return imageBlock(content)
 	}
 	return llm.Document(content)
 }
 
-// imageBlock returns the model content part for an image, downscaling and re-encoding one that is
-// too large so it stays within the per-image limit. The stored file keeps its original bytes; only
-// this copy is shrunk.
-func imageBlock(content []byte, contentType string) llm.Part {
-	if shrunk, ok := shrinkImage(content); ok {
-		return llm.Image("image/jpeg", shrunk)
+// imageBlock returns the model content part for an image, decoded and re-encoded as JPEG so a format
+// the model cannot read (HEIC) becomes one it can, and an oversized image is downscaled to fit the
+// per-image limit. If the bytes cannot be decoded, the original is sent for the model to try.
+func imageBlock(content []byte) llm.Part {
+	if jpg, ok := toJPEG(content); ok {
+		return llm.Image("image/jpeg", jpg)
 	}
-	return llm.Image(contentType, content)
+	return llm.Image(http.DetectContentType(content), content)
 }
 
-// shrinkImage downscales an oversized image to fit the per-image limit and returns it as JPEG bytes.
-// It returns ok=false when the image is already small enough, is larger than the pixel cap, or
-// cannot be decoded, so the caller sends the original.
-func shrinkImage(content []byte) ([]byte, bool) {
-	if len(content) <= llm.MaxImageBytes {
-		return nil, false
-	}
+// toJPEG decodes any registered image format, including HEIC, and re-encodes it as JPEG under the
+// model's per-image byte limit, downscaling an oversized one. It returns ok=false when the image is
+// larger than the pixel cap or cannot be decoded, so the caller sends the original.
+func toJPEG(content []byte) ([]byte, bool) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(content))
 	if err != nil || int64(config.Width)*int64(config.Height) > maxImagePixels {
 		return nil, false
