@@ -14,8 +14,10 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslambdaeventsources"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3notifications"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	golambda "github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -186,20 +188,44 @@ func NewVaultStack(scope constructs.Construct, id string, props *awscdk.StackPro
 		Resources: jsii.Strings("arn:aws:bedrock:" + *stack.Region() + ":" + *stack.Account() + ":knowledge-base/" + *knowledge.id),
 	}))
 
-	// Ingest runs as an async invocation from the S3 event. A transient failure, such as the
-	// metadata sidecar write, returns an error on purpose, so let Lambda redrive the event a few
-	// times over a bounded window rather than losing the file to a terminal failure.
+	// The check pipeline self-invokes the function asynchronously, so give async invocations a
+	// bounded retry window rather than stranding a check on a transient error.
 	fn.ConfigureAsyncInvoke(&awslambda.EventInvokeConfigOptions{
 		RetryAttempts: jsii.Number(2),
 		MaxEventAge:   awscdk.Duration_Minutes(jsii.Number(15)),
 	})
 
-	// Watch only the staging prefix so the content-addressed copy under files/ does not re-trigger ingest.
+	// Uploads flow through a queue so a burst does not fan out into concurrent Bedrock transcription
+	// calls that throttle. A dead-letter queue keeps a file that fails every redelivery, so a broken
+	// upload surfaces there instead of being lost.
+	ingestDLQ := awssqs.NewQueue(stack, jsii.String("IngestDLQ"), &awssqs.QueueProps{
+		Encryption: awssqs.QueueEncryption_SQS_MANAGED,
+		EnforceSSL: jsii.Bool(true),
+	})
+	ingestQueue := awssqs.NewQueue(stack, jsii.String("IngestQueue"), &awssqs.QueueProps{
+		Encryption:        awssqs.QueueEncryption_SQS_MANAGED,
+		EnforceSSL:        jsii.Bool(true),
+		VisibilityTimeout: awscdk.Duration_Seconds(jsii.Number(180)),
+		DeadLetterQueue: &awssqs.DeadLetterQueue{
+			MaxReceiveCount: jsii.Number(5),
+			Queue:           ingestDLQ,
+		},
+	})
+
+	// Watch only the staging prefix so the content-addressed copy under files/ does not re-trigger
+	// ingest, and deliver the notification to the queue rather than straight to the function.
 	bucket.AddEventNotification(
 		awss3.EventType_OBJECT_CREATED,
-		awss3notifications.NewLambdaDestination(fn),
+		awss3notifications.NewSqsDestination(ingestQueue),
 		&awss3.NotificationKeyFilter{Prefix: jsii.String(stagingKeyPrefix)},
 	)
+
+	// Drain the queue a couple of messages at a time, so at most a couple of transcriptions run at
+	// once and stay under the Bedrock rate limit; one S3 event per message keeps the mapping simple.
+	fn.AddEventSource(awslambdaeventsources.NewSqsEventSource(ingestQueue, &awslambdaeventsources.SqsEventSourceProps{
+		BatchSize:      jsii.Number(1),
+		MaxConcurrency: jsii.Number(2),
+	}))
 
 	// A schedule drives the Knowledge Base sync: the syncer advances landed files to ingested a
 	// short while after they land, running at most one ingestion job at a time.

@@ -41,6 +41,26 @@ func NewEventRouter(proxy Proxy, ingester Ingester, syncer KBSyncer, checkVerifi
 
 // Route sends one raw Lambda event to the handler for its source.
 func (r *EventRouter) Route(ctx context.Context, raw json.RawMessage) (any, error) {
+	// Uploads arrive through the ingest queue, so an SQS message wraps one S3 notification. A record
+	// that fails to ingest returns an error, so the queue redelivers it and, after enough tries,
+	// dead-letters it rather than losing the file.
+	if isSQSEvent(raw) {
+		var event events.SQSEvent
+		if err := json.Unmarshal(raw, &event); err != nil {
+			return nil, fmt.Errorf("unmarshal SQS event: %w", err)
+		}
+		for _, record := range event.Records {
+			var s3Event events.S3Event
+			if err := json.Unmarshal([]byte(record.Body), &s3Event); err != nil {
+				return nil, fmt.Errorf("unmarshal S3 event from queue message: %w", err)
+			}
+			if err := r.ingester.Handle(ctx, s3Event); err != nil {
+				return nil, fmt.Errorf("ingest queued S3 event: %w", err)
+			}
+		}
+		return nil, nil
+	}
+
 	if isS3Event(raw) {
 		var event events.S3Event
 		if err := json.Unmarshal(raw, &event); err != nil {
@@ -85,6 +105,23 @@ type s3EventProbe struct {
 // s3EventProbeRecord carries one record's event source.
 type s3EventProbeRecord struct {
 	EventSource string `json:"eventSource"`
+}
+
+// sqsEventProbe sniffs the event source of the first record.
+type sqsEventProbe struct {
+	Records []struct {
+		EventSource string `json:"eventSource"`
+	} `json:"Records"`
+}
+
+// isSQSEvent reports whether the raw event is an SQS event, which is how upload notifications reach
+// the Lambda once they pass through the ingest queue.
+func isSQSEvent(raw json.RawMessage) bool {
+	var probe sqsEventProbe
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return false
+	}
+	return len(probe.Records) > 0 && probe.Records[0].EventSource == "aws:sqs"
 }
 
 // isS3Event reports whether the raw event is an S3 event.
