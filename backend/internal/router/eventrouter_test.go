@@ -44,6 +44,31 @@ func TestHandleRoutesS3ToIngester(t *testing.T) {
 	assert.False(t, proxyCalled, "S3 event must not hit the HTTP proxy")
 }
 
+func TestHandleRoutesQueuedS3EventToIngester(t *testing.T) {
+	// Arrange: an SQS message wrapping the S3 upload notification the ingest queue delivers.
+	ctrl := gomock.NewController(t)
+	ingester := mocks.NewMockIngester(ctrl)
+	var gotKey string
+	ingester.EXPECT().Handle(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, e events.S3Event) error {
+		gotKey = e.Records[0].S3.Object.Key
+		return nil
+	})
+	proxy := func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+		t.Fatalf("a queued S3 event must not hit the HTTP proxy")
+		return events.APIGatewayV2HTTPResponse{}, nil
+	}
+	sqsPayload, err := json.Marshal(events.SQSEvent{Records: []events.SQSMessage{{EventSource: "aws:sqs", Body: s3Payload}}})
+	require.NoError(t, err)
+	adapter := router.NewEventRouter(proxy, ingester, stubSyncer{}, stubVerifier{})
+
+	// Act
+	_, err = adapter.Route(context.Background(), json.RawMessage(sqsPayload))
+
+	// Assert: the S3 event is unwrapped and handed to the ingester.
+	require.NoError(t, err)
+	assert.Equal(t, "files/abc", gotKey)
+}
+
 func TestHandleRoutesAPIToProxy(t *testing.T) {
 	// Arrange
 	ctrl := gomock.NewController(t)
