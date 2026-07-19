@@ -111,7 +111,13 @@ func heicHasMovieBox(content []byte) bool {
 			if off+16 > len(content) {
 				return false
 			}
-			size = int(binary.BigEndian.Uint64(content[off+8 : off+16]))
+			// A 64-bit size larger than the content cannot be valid, and converting it to int would
+			// overflow and drive the walk out of bounds, so stop rather than trust it.
+			large := binary.BigEndian.Uint64(content[off+8 : off+16])
+			if large > uint64(len(content)) {
+				return false
+			}
+			size = int(large)
 			hdr = 16
 		case 0:
 			size = len(content) - off

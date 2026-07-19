@@ -84,6 +84,11 @@ func TestHeicHasMovieBoxHandlesMalformedBytesWithoutPanic(t *testing.T) {
 	overrun := []byte{0, 0, 0, 255, 'f', 't', 'y', 'p', 'm', 'i', 'f', '1'}
 	assert.False(t, heicHasMovieBox(overrun))
 	assert.False(t, heicHasMovieBox(nil))
+
+	// A 64-bit extended size (size field of 1) near the integer limit must not overflow the bounds
+	// check and drive the offset negative.
+	extended := []byte{0, 0, 0, 1, 'f', 't', 'y', 'p', 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	assert.False(t, heicHasMovieBox(extended))
 }
 
 func TestDetectContentTypeCorrectsAMislabelledImage(t *testing.T) {
