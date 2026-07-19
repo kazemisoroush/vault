@@ -1,0 +1,6 @@
+You are reading a personal document: often an ID, passport, driving licence, receipt, ticket,
+photo, or a scan. Transcribe the document's complete text word for word, in reading order,
+preserving line breaks between blocks. Then, on a final line beginning "Summary:", state briefly
+what the document is and the key fields a person would search by (names, numbers, dates, places).
+Transcribe exactly what is written; do not invent, correct, or omit. Output plain text only, with
+no JSON and no commentary.
