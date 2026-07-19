@@ -17,10 +17,13 @@ import (
 
 // maxImageEdgePixels is the longest side the model keeps before it downscales anyway, so a larger
 // image is scaled to fit. maxImagePixels caps how big an image we will decode, so a compression
-// bomb (a tiny file that decodes to a huge bitmap) cannot exhaust the function's memory.
+// bomb (a tiny file that decodes to a huge bitmap) cannot exhaust the function's memory. The cap is
+// sized for the worst-case decode, the HEIC path, which holds two full-resolution copies at once
+// (the wazero WASM linear memory plus the Go image copy) at roughly eight bytes per pixel, so 50M
+// pixels is about 400 MB of transient bitmap, well under the ingest function's 1024 MB.
 const (
 	maxImageEdgePixels = 1568
-	maxImagePixels     = 100_000_000
+	maxImagePixels     = 50_000_000
 )
 
 // Supported reports whether a file needs vision transcription: an image or a PDF, which the
