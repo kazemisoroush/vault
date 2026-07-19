@@ -9,17 +9,26 @@ const (
 	keyPrefix     = "files/"
 	stagingPrefix = "uploads/"
 	textPrefix    = "text/"
+	kbPrefix      = "kb/"
 )
 
-// Key returns the content-addressed S3 object key for a file id (its content hash).
+// Key returns the content-addressed S3 object key for a file id (its content hash). This holds the
+// raw bytes for download; the Knowledge Base indexes the KB source under kbPrefix instead.
 func Key(id string) string {
 	return keyPrefix + id
 }
 
-// MetadataKey returns the Knowledge Base metadata sidecar key for a file, which the managed data
-// source reads to attach the file's id and name to every passage it indexes from the object.
-func MetadataKey(id string) string {
-	return Key(id) + ".metadata.json"
+// KBKey returns the S3 object key of a file's Knowledge Base source: the searchable representation
+// the data source indexes, which is extracted text for an image or PDF, or a copy of a parseable
+// document. It is separate from the raw object so the data source never sees a format it rejects.
+func KBKey(id string) string {
+	return kbPrefix + id
+}
+
+// KBMetadataKey returns the metadata sidecar key for a file's Knowledge Base source, which the data
+// source reads to attach the file's id and name to every passage it indexes.
+func KBMetadataKey(id string) string {
+	return KBKey(id) + ".metadata.json"
 }
 
 // IDFromKey returns the file id embedded in a content-addressed object key.

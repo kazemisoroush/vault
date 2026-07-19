@@ -100,8 +100,10 @@ func TestDeleteRemovesRecordThenBlobAndMetadata(t *testing.T) {
 	idx.EXPECT().Get(gomock.Any(), "test-id").Return(file, nil)
 	idx.EXPECT().Delete(gomock.Any(), "test-id").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), "files/test-id").Return(nil)
-	// The Knowledge Base metadata sidecar is removed too, so the next sync drops the file.
-	blobs.EXPECT().Delete(gomock.Any(), "files/test-id.metadata.json").Return(nil)
+	// The Knowledge Base source and its metadata sidecar are removed too, so the next sync drops
+	// the file from the index.
+	blobs.EXPECT().Delete(gomock.Any(), "kb/test-id").Return(nil)
+	blobs.EXPECT().Delete(gomock.Any(), "kb/test-id.metadata.json").Return(nil)
 	c := NewFileController(idx, blobs)
 	req := httptest.NewRequest(http.MethodDelete, "/files/test-id", nil)
 	req.SetPathValue("id", "test-id")

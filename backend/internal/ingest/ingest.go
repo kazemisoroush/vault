@@ -20,19 +20,21 @@ import (
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/index"
 	"github.com/kazemisoroush/vault/backend/internal/kb"
+	"github.com/kazemisoroush/vault/backend/internal/vision"
 )
 
 // Handler settles a file after it lands in S3.
 type Handler struct {
-	index    index.Index
-	blobs    blob.Store
-	unpacker archive.Unpacker
-	now      func() time.Time
+	index       index.Index
+	blobs       blob.Store
+	transcriber vision.Transcriber
+	unpacker    archive.Unpacker
+	now         func() time.Time
 }
 
 // NewHandler builds an ingest Handler with a real clock and the default zip unpacker.
-func NewHandler(idx index.Index, blobs blob.Store) *Handler {
-	return &Handler{index: idx, blobs: blobs, unpacker: archive.Zip{}, now: time.Now}
+func NewHandler(idx index.Index, blobs blob.Store, transcriber vision.Transcriber) *Handler {
+	return &Handler{index: idx, blobs: blobs, transcriber: transcriber, unpacker: archive.Zip{}, now: time.Now}
 }
 
 // Handle processes every object-created record in an S3 event.
@@ -103,10 +105,11 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 		return fmt.Errorf("copy to %q: %w", file.Key, err)
 	}
 
-	// The Knowledge Base parses the stored object itself, so the only thing ingestion writes
-	// besides the record is the metadata sidecar that ties indexed passages back to this file.
-	if err := h.writeMetadata(ctx, file); err != nil {
-		return fmt.Errorf("write metadata for %q: %w", hash, err)
+	// The Knowledge Base cannot index an image or a scanned PDF, so write its searchable KB source
+	// (transcribed text for those, a copy of the raw for a document it parses) plus the metadata
+	// sidecar that ties indexed passages back to this file.
+	if err := h.writeKBSource(ctx, file, content, contentType); err != nil {
+		return fmt.Errorf("write kb source for %q: %w", hash, err)
 	}
 
 	if _, err := h.save(ctx, file, domain.StatusLanded); err != nil {
@@ -116,14 +119,28 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 	return nil
 }
 
-// writeMetadata writes the file's Knowledge Base metadata sidecar next to the stored object, so the
-// data source attaches the file id and name to every passage. Without it a passage cannot be cited.
-func (h *Handler) writeMetadata(ctx context.Context, file domain.File) error {
-	body, err := kb.MetadataSidecar(file.ID, file.Name)
+// writeKBSource writes the file's Knowledge Base source and its metadata sidecar. An image or PDF
+// is transcribed to text the data source can index; a document the data source parses itself is
+// copied through from the raw object. The sidecar carries the file id and name so a retrieved
+// passage can be cited back to this file.
+func (h *Handler) writeKBSource(ctx context.Context, file domain.File, content []byte, contentType string) error {
+	if vision.Supported(contentType) {
+		text, err := h.transcriber.Transcribe(ctx, content, contentType)
+		if err != nil {
+			return fmt.Errorf("transcribe %q: %w", file.ID, err)
+		}
+		if err := h.blobs.Put(ctx, blob.KBKey(file.ID), "text/plain; charset=utf-8", []byte(text)); err != nil {
+			return fmt.Errorf("put kb text for %q: %w", file.ID, err)
+		}
+	} else if err := h.blobs.Copy(ctx, file.Key, blob.KBKey(file.ID)); err != nil {
+		return fmt.Errorf("copy kb source for %q: %w", file.ID, err)
+	}
+
+	sidecar, err := kb.MetadataSidecar(file.ID, file.Name)
 	if err != nil {
 		return fmt.Errorf("build metadata for %q: %w", file.ID, err)
 	}
-	if err := h.blobs.Put(ctx, blob.MetadataKey(file.ID), kb.MetadataContentType, body); err != nil {
+	if err := h.blobs.Put(ctx, blob.KBMetadataKey(file.ID), kb.MetadataContentType, sidecar); err != nil {
 		return fmt.Errorf("put metadata for %q: %w", file.ID, err)
 	}
 	return nil

@@ -70,7 +70,7 @@ func TestZipExpandsEachInnerFileAsAStagedUpload(t *testing.T) {
 	idx.EXPECT().Delete(gomock.Any(), "upl-1").Return(nil)
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
-	h := ingest.NewHandler(idx, blobs)
+	h := ingest.NewHandler(idx, blobs, mocks.NewMockTranscriber(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event(staging))
@@ -108,7 +108,7 @@ func TestZipOverSizeCapMarksFailedWithoutLoading(t *testing.T) {
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 	// No blobs.Get: an over-cap archive is rejected before it is loaded.
 
-	h := ingest.NewHandler(idx, blobs)
+	h := ingest.NewHandler(idx, blobs, mocks.NewMockTranscriber(ctrl))
 
 	// Act: the event's object size, not the client-declared record size, drives the guard.
 	err := h.Handle(context.Background(), s3EventSized(staging, (512<<20)+1))
@@ -140,7 +140,7 @@ func TestZipWithNoRealFilesMarksFailed(t *testing.T) {
 	})
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
-	h := ingest.NewHandler(idx, blobs)
+	h := ingest.NewHandler(idx, blobs, mocks.NewMockTranscriber(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event(staging))
@@ -167,7 +167,7 @@ func TestCorruptZipMarksFailed(t *testing.T) {
 	})
 	blobs.EXPECT().Delete(gomock.Any(), staging).Return(nil)
 
-	h := ingest.NewHandler(idx, blobs)
+	h := ingest.NewHandler(idx, blobs, mocks.NewMockTranscriber(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event(staging))
@@ -183,7 +183,7 @@ func TestSettledArchiveRedeliveryIsNoOp(t *testing.T) {
 	idx := mocks.NewMockIndex(ctrl)
 	idx.EXPECT().Get(gomock.Any(), "upl-1").Return(domain.File{ID: "upl-1", ContentType: "application/zip", Status: domain.StatusFailed}, nil)
 
-	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl))
+	h := ingest.NewHandler(idx, mocks.NewMockStore(ctrl), mocks.NewMockTranscriber(ctrl))
 
 	// Act
 	err := h.Handle(context.Background(), s3Event("uploads/upl-1"))

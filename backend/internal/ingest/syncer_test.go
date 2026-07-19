@@ -11,6 +11,7 @@ import (
 
 	"github.com/kazemisoroush/vault/backend/internal/domain"
 	"github.com/kazemisoroush/vault/backend/internal/ingest"
+	"github.com/kazemisoroush/vault/backend/internal/kb"
 	"github.com/kazemisoroush/vault/backend/internal/mocks"
 )
 
@@ -25,7 +26,7 @@ func TestSyncAdvancesLandedToIngestedWhenJobCompletes(t *testing.T) {
 		{ID: "b", Status: domain.StatusLanded},
 	}
 	idx.EXPECT().ListByStatus(gomock.Any(), domain.StatusLanded, gomock.Any()).Return(landed, nil)
-	indexer.EXPECT().Sync(gomock.Any()).Return(true, nil)
+	indexer.EXPECT().Sync(gomock.Any()).Return(kb.SyncResult{Completed: true}, nil)
 	// Each snapshotted file is advanced landed -> ingested with a conditional write.
 	idx.EXPECT().AdvanceStatus(gomock.Any(), "a", domain.StatusLanded, domain.StatusIngested).Return(nil)
 	idx.EXPECT().AdvanceStatus(gomock.Any(), "b", domain.StatusLanded, domain.StatusIngested).Return(nil)
@@ -33,6 +34,28 @@ func TestSyncAdvancesLandedToIngestedWhenJobCompletes(t *testing.T) {
 	s := ingest.NewSyncer(indexer, idx)
 
 	// Act & Assert: both files advance; the strict mock fails on any unexpected call.
+	require.NoError(t, s.Sync(context.Background()))
+}
+
+func TestSyncMarksKBFailedFilesFailedNotIngested(t *testing.T) {
+	// Arrange: two landed files; the job indexes one and could not index the other.
+	ctrl := gomock.NewController(t)
+	indexer := mocks.NewMockIndexer(ctrl)
+	idx := mocks.NewMockIndex(ctrl)
+
+	landed := []domain.File{
+		{ID: "ok", Status: domain.StatusLanded},
+		{ID: "bad", Status: domain.StatusLanded},
+	}
+	idx.EXPECT().ListByStatus(gomock.Any(), domain.StatusLanded, gomock.Any()).Return(landed, nil)
+	indexer.EXPECT().Sync(gomock.Any()).Return(kb.SyncResult{Completed: true, FailedFileIDs: []string{"bad"}}, nil)
+	// The indexed file advances to ingested; the one the job could not index becomes failed.
+	idx.EXPECT().AdvanceStatus(gomock.Any(), "ok", domain.StatusLanded, domain.StatusIngested).Return(nil)
+	idx.EXPECT().AdvanceStatus(gomock.Any(), "bad", domain.StatusLanded, domain.StatusFailed).Return(nil)
+
+	s := ingest.NewSyncer(indexer, idx)
+
+	// Act & Assert: the status never claims the unindexed file is searchable.
 	require.NoError(t, s.Sync(context.Background()))
 }
 
@@ -57,7 +80,7 @@ func TestSyncLeavesLandedWhenAJobIsAlreadyRunning(t *testing.T) {
 
 	idx.EXPECT().ListByStatus(gomock.Any(), domain.StatusLanded, gomock.Any()).
 		Return([]domain.File{{ID: "a", Status: domain.StatusLanded}}, nil)
-	indexer.EXPECT().Sync(gomock.Any()).Return(false, nil)
+	indexer.EXPECT().Sync(gomock.Any()).Return(kb.SyncResult{}, nil)
 
 	s := ingest.NewSyncer(indexer, idx)
 
@@ -73,7 +96,7 @@ func TestSyncReturnsAnIngestionError(t *testing.T) {
 
 	idx.EXPECT().ListByStatus(gomock.Any(), domain.StatusLanded, gomock.Any()).
 		Return([]domain.File{{ID: "a", Status: domain.StatusLanded}}, nil)
-	indexer.EXPECT().Sync(gomock.Any()).Return(false, errors.New("bedrock down"))
+	indexer.EXPECT().Sync(gomock.Any()).Return(kb.SyncResult{}, errors.New("bedrock down"))
 
 	s := ingest.NewSyncer(indexer, idx)
 
