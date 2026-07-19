@@ -100,6 +100,9 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 	file := pending
 	file.ID = hash
 	file.Key = blob.Key(hash)
+	// Correct a mislabelled type: browsers often upload an image, such as HEIC, as
+	// application/octet-stream, which would otherwise skip transcription and fail in the index.
+	file.ContentType = vision.DetectContentType(contentType, content)
 
 	if err := h.blobs.Copy(ctx, stagingKey, file.Key); err != nil {
 		return fmt.Errorf("copy to %q: %w", file.Key, err)
@@ -108,7 +111,7 @@ func (h *Handler) handleKey(ctx context.Context, stagingKey string, objectSize i
 	// The Knowledge Base cannot index an image or a scanned PDF, so write its searchable KB source
 	// (transcribed text for those, a copy of the raw for a document it parses) plus the metadata
 	// sidecar that ties indexed passages back to this file.
-	if err := h.writeKBSource(ctx, file, content, contentType); err != nil {
+	if err := h.writeKBSource(ctx, file, content, file.ContentType); err != nil {
 		return fmt.Errorf("write kb source for %q: %w", hash, err)
 	}
 

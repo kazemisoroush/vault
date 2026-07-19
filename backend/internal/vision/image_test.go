@@ -2,13 +2,25 @@ package vision
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	"image/png"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// box builds one ISOBMFF box (a 32-bit size, a 4-char type, then the payload), the shape the HEIC
+// container uses.
+func box(typ string, payload []byte) []byte {
+	b := make([]byte, 8+len(payload))
+	binary.BigEndian.PutUint32(b[0:4], uint32(8+len(payload)))
+	copy(b[4:8], typ)
+	copy(b[8:], payload)
+	return b
+}
 
 func TestSupportedCoversImagesAndPDFs(t *testing.T) {
 	assert.True(t, Supported("image/jpeg"))
@@ -38,10 +50,55 @@ func TestScaledBoundsNeverRoundsToEmpty(t *testing.T) {
 	assert.GreaterOrEqual(t, got.Dy(), 1)
 }
 
-func TestShrinkImageLeavesASmallImageAlone(t *testing.T) {
-	// A small PNG is under the byte limit, so shrinkImage declines and the caller sends the original.
+func TestToJPEGNormalizesAPNG(t *testing.T) {
+	// A PNG is decoded and re-encoded as JPEG, so the model always receives a format it can read.
 	var buf bytes.Buffer
-	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 16, 16))))
-	_, ok := shrinkImage(buf.Bytes())
+	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 32, 24))))
+
+	jpg, ok := toJPEG(buf.Bytes())
+	require.True(t, ok)
+	_, format, err := image.DecodeConfig(bytes.NewReader(jpg))
+	require.NoError(t, err)
+	assert.Equal(t, "jpeg", format)
+}
+
+func TestToJPEGDeclinesNonImageBytes(t *testing.T) {
+	_, ok := toJPEG([]byte("this is not an image"))
 	assert.False(t, ok)
+}
+
+func TestHeicHasMovieBoxDetectsASequence(t *testing.T) {
+	still := append(box("ftyp", []byte("heicmif1")), box("meta", []byte("meta payload"))...)
+	still = append(still, box("mdat", []byte("image data"))...)
+	assert.False(t, heicHasMovieBox(still), "a still image has no moov box")
+
+	sequence := append(box("ftyp", []byte("msf1hevc")), box("moov", []byte("movie payload"))...)
+	assert.True(t, heicHasMovieBox(sequence), "an image sequence carries a moov box")
+}
+
+func TestHeicHasMovieBoxHandlesMalformedBytesWithoutPanic(t *testing.T) {
+	// A truncated header, a box shorter than its header, and a length running past the end must all
+	// stop the walk rather than loop or read out of bounds.
+	assert.False(t, heicHasMovieBox([]byte("ftyp")))
+	assert.False(t, heicHasMovieBox([]byte{0, 0, 0, 4, 'f', 't', 'y', 'p'}))
+	overrun := []byte{0, 0, 0, 255, 'f', 't', 'y', 'p', 'm', 'i', 'f', '1'}
+	assert.False(t, heicHasMovieBox(overrun))
+	assert.False(t, heicHasMovieBox(nil))
+
+	// A 64-bit extended size (size field of 1) near the integer limit must not overflow the bounds
+	// check and drive the offset negative.
+	extended := []byte{0, 0, 0, 1, 'f', 't', 'y', 'p', 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	assert.False(t, heicHasMovieBox(extended))
+}
+
+func TestDetectContentTypeCorrectsAMislabelledImage(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 8, 8))))
+
+	// A real declared type is trusted as-is.
+	assert.Equal(t, "image/jpeg", DetectContentType("image/jpeg", buf.Bytes()))
+	// A browser that uploads an image as octet-stream is corrected by sniffing the bytes.
+	assert.Equal(t, "image/png", DetectContentType("application/octet-stream", buf.Bytes()))
+	// Non-image bytes stay generic, so they are not routed to transcription.
+	assert.False(t, strings.HasPrefix(DetectContentType("application/octet-stream", []byte("plain text")), "image/"))
 }
