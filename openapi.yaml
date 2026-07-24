@@ -114,6 +114,30 @@ paths:
                 $ref: '#/components/schemas/AskResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /fill:
+    post:
+      operationId: fill
+      summary: Answer a list of form fields from the owner's vault, each with its source file.
+      description: >
+        Fills a form from records instead of by hand. Each field is answered against the owner's
+        files, concurrently, and the answers come back in request order. A field the vault cannot
+        back with a document is returned found=false with an empty value, so a value never lands on
+        a form without a source to review.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FillRequest'
+      responses:
+        '200':
+          description: One answer per field, in request order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FillResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /checks:
     post:
       operationId: createCheck
@@ -281,6 +305,44 @@ components:
       properties:
         file: { $ref: '#/components/schemas/File' }
         downloadUrl: { type: string }
+    FillRequest:
+      type: object
+      required: [fields]
+      properties:
+        fields:
+          type: array
+          description: The form's fields, as free-text names such as "passport number".
+          items: { type: string }
+    FillSource:
+      type: object
+      required: [file, downloadUrl]
+      properties:
+        file: { $ref: '#/components/schemas/File' }
+        downloadUrl: { type: string }
+    FillAnswer:
+      type: object
+      required: [field, value, found, sources]
+      properties:
+        field: { type: string }
+        value:
+          type: string
+          description: The answer, empty when found is false.
+        found:
+          type: boolean
+          description: True only when a document backs the value. False means the vault had no sourced answer.
+        error:
+          type: boolean
+          description: True when the lookup itself failed. This is not a genuine miss, so the caller retries rather than treating the value as absent.
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/FillSource' }
+    FillResponse:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          items: { $ref: '#/components/schemas/FillAnswer' }
     AskResponse:
       type: object
       required: [results]
