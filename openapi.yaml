@@ -329,7 +329,10 @@ components:
           description: The answer, empty when found is false.
         found:
           type: boolean
-          description: True only when a document backs the value; false means the vault had no sourced answer.
+          description: True only when a document backs the value. False means the vault had no sourced answer.
+        error:
+          type: boolean
+          description: True when the lookup itself failed. This is not a genuine miss, so the caller retries rather than treating the value as absent.
         sources:
           type: array
           items: { $ref: '#/components/schemas/FillSource' }

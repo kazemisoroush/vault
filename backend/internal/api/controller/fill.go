@@ -48,11 +48,14 @@ type fillSource struct {
 }
 
 // fillAnswer is one row of the filled form. found is false, and value empty, when the vault holds
-// no sourced answer: these values go on a real form, so an uncited guess is never returned.
+// no sourced answer: these values go on a real form, so an uncited guess is never returned. error is
+// true when the lookup itself failed, which is not the same as a genuine miss: the value may well be
+// in the vault, so the caller retries rather than concluding it is absent.
 type fillAnswer struct {
 	Field   string       `json:"field"`
 	Value   string       `json:"value"`
 	Found   bool         `json:"found"`
+	Error   bool         `json:"error,omitempty"`
 	Sources []fillSource `json:"sources"`
 }
 
@@ -96,14 +99,15 @@ func (c *FillController) Fill(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, fillResponse{Answers: answers})
 }
 
-// answerField runs one field through the agent and presigns each source it cited. A field with no
-// cited file, or one the agent errors on, is returned as not found: the form must never carry a
-// value the vault could not back with a document.
+// answerField runs one field through the agent and presigns each source it cited. A failed lookup
+// comes back error:true, kept distinct from a genuine miss (found:false), so a transient failure is
+// never read as the value being absent. Either way the form carries no value the vault could not
+// back with a document.
 func (c *FillController) answerField(ctx context.Context, ownerID, field string) fillAnswer {
 	result, err := c.agent.Answer(ctx, ownerID, field)
 	if err != nil {
 		log.Printf("fill: answer %q: %v", field, err)
-		return fillAnswer{Field: field, Sources: []fillSource{}}
+		return fillAnswer{Field: field, Error: true, Sources: []fillSource{}}
 	}
 	if len(result.Files) == 0 {
 		return fillAnswer{Field: field, Sources: []fillSource{}}

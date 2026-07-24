@@ -50,8 +50,9 @@ func TestFillAnswersEachFieldInOrderWithItsSource(t *testing.T) {
 	assert.Contains(t, body, `"found":false`)
 }
 
-func TestFillTreatsAnAgentErrorAsNotFound(t *testing.T) {
-	// Arrange: the agent errors on the one field. One field must never sink the whole form.
+func TestFillFlagsAnAgentErrorDistinctlyFromAMiss(t *testing.T) {
+	// Arrange: the agent errors on the one field. One field must never sink the whole form, and a
+	// failed lookup must not read as the value being absent.
 	c, answerer, _ := fillController(t)
 	answerer.EXPECT().Answer(gomock.Any(), gomock.Any(), "medicare number").
 		Return(agent.Result{}, assert.AnError)
@@ -61,9 +62,11 @@ func TestFillTreatsAnAgentErrorAsNotFound(t *testing.T) {
 	// Act
 	c.Fill(rec, req)
 
-	// Assert: still 200, the field comes back not found rather than as an error.
+	// Assert: still 200; the field is flagged error:true, distinct from a genuine found:false miss.
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), `"found":false`)
+	body := rec.Body.String()
+	assert.Contains(t, body, `"found":false`)
+	assert.Contains(t, body, `"error":true`)
 }
 
 func TestFillRejectsWhenEveryFieldIsBlank(t *testing.T) {
