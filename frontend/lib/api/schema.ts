@@ -60,6 +60,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a list of form fields from the owner's vault, each with its source file.
+         * @description Fills a form from records instead of by hand. Each field is answered against the owner's files, concurrently, and the answers come back in request order. A field the vault cannot back with a document is returned found=false with an empty value, so a value never lands on a form without a source to review.
+         */
+        post: operations["fill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/checks": {
         parameters: {
             query?: never;
@@ -208,6 +228,27 @@ export interface components {
         AskResult: {
             file: components["schemas"]["File"];
             downloadUrl: string;
+        };
+        FillRequest: {
+            /** @description The form's fields, as free-text names such as "passport number". */
+            fields: string[];
+        };
+        FillSource: {
+            file: components["schemas"]["File"];
+            downloadUrl: string;
+        };
+        FillAnswer: {
+            field: string;
+            /** @description The answer, empty when found is false. */
+            value: string;
+            /** @description True only when a document backs the value. False means the vault had no sourced answer. */
+            found: boolean;
+            /** @description True when the lookup itself failed. This is not a genuine miss, so the caller retries rather than treating the value as absent. */
+            error?: boolean;
+            sources: components["schemas"]["FillSource"][];
+        };
+        FillResponse: {
+            answers: components["schemas"]["FillAnswer"][];
         };
         AskResponse: {
             /** @description A short human-readable answer drawn from the matched files, empty when there is none. */
@@ -447,6 +488,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AskResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    fill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FillRequest"];
+            };
+        };
+        responses: {
+            /** @description One answer per field, in request order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
