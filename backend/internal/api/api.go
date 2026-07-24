@@ -23,6 +23,7 @@ func NewHandler(ctx context.Context, cfg config.Config, idx index.Index, blobs b
 	router := NewRouter(
 		controller.NewFileController(idx, blobs),
 		controller.NewAskController(answerer, blobs),
+		controller.NewFillController(answerer, blobs),
 		controller.NewCheckController(checkStore, enqueuer),
 		controller.NewCallsController(calls),
 		controller.NewHealthController(),
