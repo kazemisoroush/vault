@@ -84,7 +84,8 @@ Rules for the body:
 - Always divide tests into 3 parts separated with comments. // Arrange // Act // Assert.
 - Remove unnecessary and unused tests on your way of developing new things.
 - Never remove an existing inline comment unless asked to, and avoid adding new ones.
-- All doc-blocks are at most 1 short sentence.
+- Keep doc-blocks to one short sentence. Add more only to record a correctness or
+  security subtlety a reader needs; anything else goes in the PR.
 - Do not keep history in comments while changing the code.
 - Never reference a ticket number in the code. `SOR-248` belongs in the pull
   request or the commit message, not in a comment.
